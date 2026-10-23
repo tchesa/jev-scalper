@@ -1,0 +1,29 @@
+{
+  "name": "jev-scalper",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Paper-trading research harness: Jev as a signal classifier on Binance meme perps",
+  "type": "module",
+  "engines": { "node": ">=22.13" },
+  "scripts": {
+    "dev": "node --no-warnings=ExperimentalWarning --import tsx src/main.ts",
+    "start": "node --no-warnings=ExperimentalWarning --import tsx src/main.ts",
+    "eval": "node --no-warnings=ExperimentalWarning --import tsx src/eval/calibration.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "jev:ping": "node --import tsx src/scripts/jevPing.ts"
+  },
+  "dependencies": {
+    "@typesafe-ai/sdk": "^0.7.0",
+    "dotenv": "^18.0.0",
+    "ws": "^8.18.0",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "@types/ws": "^8.18.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0",
+    "vitest": "^4.0.0"
+  }
+}
