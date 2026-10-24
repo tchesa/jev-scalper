@@ -1,38 +1,71 @@
 import type { Config } from "../config.js";
 import { roundTripCostBps } from "../state/builder.js";
-import type { QuestionSpec } from "./types.js";
+import type { BarrierOutcome, BarrierVariant, ChoiceSpec, QuestionSpec } from "./types.js";
 
-export const QUESTION_VERSION = "tb-v1";
+export const QUESTION_VERSIONS = ["tb-v1", "tb-v2"] as const;
+export type QuestionVersion = (typeof QUESTION_VERSIONS)[number];
+
+function criteria(x: number, mins: number): Record<BarrierOutcome, string> {
+  return {
+    up_first: `Mid reaches +${x}% above the current mid before it reaches -${x}% below, within ${mins} minutes.`,
+    down_first: `Mid reaches -${x}% below the current mid before it reaches +${x}% above, within ${mins} minutes.`,
+    neither: `Mid reaches neither barrier within ${mins} minutes.`,
+  };
+}
 
 /**
- * The triple-barrier question. It states the goal, the horizon and the cost context explicitly;
- * bare labels like "long or short?" are deliberately avoided.
+ * tb-v1: the original wording. Besides goal, horizon and cost it carries two strategy hints
+ * (small coins mean-revert, sharp moves on thin books are manufactured). Kept byte-identical
+ * so rows collected before tb-v2 existed stay comparable.
+ */
+function tbV1(x: number, mins: number, cost: number): ChoiceSpec<BarrierOutcome> {
+  return {
+    type: "choice",
+    instructions:
+      `The state is a live snapshot of one Binance USDT-margined perpetual futures contract on a meme coin, ` +
+      `built from the order book, recent trades, 1-minute candles, funding and open interest. ` +
+      `Goal: decide whether a short scalp has an edge. Starting from the current mid price (book.mid), ` +
+      `which barrier will the mid price reach FIRST within the next ${mins} minutes: ` +
+      `the up barrier at +${x}% or the down barrier at -${x}%? ` +
+      `A round trip costs about ${cost} bps in fees and slippage, so only a clear lean is worth trading; ` +
+      `when the two outcomes look balanced, spread probability accordingly. ` +
+      `Consider that small, illiquid coins tend to mean-revert over minutes while large, liquid ones tend to continue, ` +
+      `and that sharp moves on thin books are often manufactured.`,
+    criteria: criteria(x, mins),
+  };
+}
+
+/** tb-v2: goal, horizon and cost only. No strategy hints, no view on direction. */
+function tbV2(x: number, mins: number, cost: number): ChoiceSpec<BarrierOutcome> {
+  return {
+    type: "choice",
+    instructions:
+      `The state is a live snapshot of one Binance USDT-margined perpetual futures contract on a meme coin, ` +
+      `built from the order book, recent trades, 1-minute candles, funding and open interest. ` +
+      `Goal: decide whether a short scalp has an edge. Starting from the current mid price (book.mid), ` +
+      `which barrier will the mid price reach FIRST within the next ${mins} minutes: ` +
+      `the up barrier at +${x}%, the down barrier at -${x}%, or neither? ` +
+      `A round trip costs about ${cost} bps in fees and slippage. ` +
+      `Report your honest probability for each outcome; a symmetric market should get symmetric probabilities.`,
+    criteria: criteria(x, mins),
+  };
+}
+
+const BUILDERS: Record<QuestionVersion, (x: number, mins: number, cost: number) => ChoiceSpec<BarrierOutcome>> = {
+  "tb-v1": tbV1,
+  "tb-v2": tbV2,
+};
+
+/**
+ * The triple-barrier question in every configured wording, plus the optional regime question.
+ * Every wording states the goal, the horizon and the cost context; bare labels like "long or short?" are avoided.
  */
 export function buildQuestion(cfg: Config): QuestionSpec {
   const x = cfg.question.barrierPct;
   const mins = cfg.question.horizonMs / 60_000;
   const cost = roundTripCostBps(cfg);
-  const spec: QuestionSpec = {
-    version: QUESTION_VERSION,
-    barrier: {
-      type: "choice",
-      instructions:
-        `The state is a live snapshot of one Binance USDT-margined perpetual futures contract on a meme coin, ` +
-        `built from the order book, recent trades, 1-minute candles, funding and open interest. ` +
-        `Goal: decide whether a short scalp has an edge. Starting from the current mid price (book.mid), ` +
-        `which barrier will the mid price reach FIRST within the next ${mins} minutes: ` +
-        `the up barrier at +${x}% or the down barrier at -${x}%? ` +
-        `A round trip costs about ${cost} bps in fees and slippage, so only a clear lean is worth trading; ` +
-        `when the two outcomes look balanced, spread probability accordingly. ` +
-        `Consider that small, illiquid coins tend to mean-revert over minutes while large, liquid ones tend to continue, ` +
-        `and that sharp moves on thin books are often manufactured.`,
-      criteria: {
-        up_first: `Mid reaches +${x}% above the current mid before it reaches -${x}% below, within ${mins} minutes.`,
-        down_first: `Mid reaches -${x}% below the current mid before it reaches +${x}% above, within ${mins} minutes.`,
-        neither: `Mid reaches neither barrier within ${mins} minutes.`,
-      },
-    },
-  };
+  const variants: BarrierVariant[] = cfg.question.versions.map((version) => ({ version, question: BUILDERS[version](x, mins, cost) }));
+  const spec: QuestionSpec = { variants };
   if (cfg.question.askRegime) {
     spec.regime = {
       type: "choice",

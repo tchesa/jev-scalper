@@ -16,10 +16,11 @@ describe("Ledger", () => {
       model: "mock",
       questionVersion: "tb-v1",
       ts: 2,
-      output: { modelVersion: "mock-v1", latencyMs: 1, barrier: { choice: "up_first", confidence: 0.2, probabilities: { up_first: 0.5, down_first: 0.3, neither: 0.2 } } },
+      output: { modelVersion: "mock-v1", latencyMs: 1, barriers: [] },
+      barrier: { choice: "up_first", confidence: 0.2, probabilities: { up_first: 0.5, down_first: 0.3, neither: 0.2 } },
       error: null,
     });
-    ledger.insertDecision({ stateId, model: "jev", questionVersion: "tb-v1", ts: 2, output: null, error: "APITimeoutError: timeout" });
+    ledger.insertDecision({ stateId, model: "jev", questionVersion: "tb-v1", ts: 2, output: null, barrier: null, error: "APITimeoutError: timeout" });
     expect(ledger.unlabeledStateIds()).toEqual([1]);
     ledger.insertLabel({ stateId, outcome: "up_first", hitTs: 3, hitPx: 1.005, mid10s: 1.001, mid30s: null, mid60s: null, mid300s: null, maxUpPct: 0.5, maxDownPct: 0.1, labeledTs: 3 });
     expect(ledger.unlabeledStateIds()).toEqual([]);

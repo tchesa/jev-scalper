@@ -20,5 +20,7 @@ const state: SymbolState = {
 };
 
 const model = new JevModel(cfg.typesafe.apiKey!, cfg.typesafe.model, cfg.loop.modelTimeoutMs);
-const out = await model.evaluate(state, buildQuestion(cfg), new AbortController().signal);
+const question = buildQuestion(cfg);
+const out = await model.evaluate(state, question, new AbortController().signal);
 console.log(JSON.stringify(out, null, 2));
+console.log(`\nvariants asked: ${question.variants.map((v) => v.version).join(", ")}; input tokens: ${out.usage?.inputTokens}`);

@@ -70,7 +70,7 @@ class App {
       symbols: [...this.feeds.keys()],
       barrierPct: this.cfg.question.barrierPct,
       horizonMin: this.cfg.question.horizonMs / 60_000,
-      questionVersion: this.question.version,
+      questionVersions: this.question.variants.map((v) => v.version),
     });
   }
 
@@ -270,16 +270,16 @@ class App {
     } finally {
       clearTimeout(timer);
     }
-    this.ledger.insertDecision({ stateId, model: model.name, questionVersion: this.question.version, ts: Date.now(), output, error });
+    const ts = Date.now();
     if (output) {
-      log.debug("decision", {
-        model: model.name,
-        symbol: state.symbol,
-        choice: output.barrier.choice,
-        p: output.barrier.probabilities,
-        regime: output.regime?.choice,
-        latencyMs: output.latencyMs,
-      });
+      for (const { version, answer } of output.barriers) {
+        this.ledger.insertDecision({ stateId, model: model.name, questionVersion: version, ts, output, barrier: answer, error: null });
+        log.debug("decision", { model: model.name, version, symbol: state.symbol, choice: answer.choice, p: answer.probabilities, regime: output.regime?.choice, latencyMs: output.latencyMs });
+      }
+    } else {
+      for (const v of this.question.variants) {
+        this.ledger.insertDecision({ stateId, model: model.name, questionVersion: v.version, ts, output: null, barrier: null, error });
+      }
     }
   }
 }

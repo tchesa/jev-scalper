@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { z } from "zod";
+import { QUESTION_VERSIONS, type QuestionVersion } from "./model/question.js";
 
 const bool = (def: string) =>
   z
@@ -35,6 +36,7 @@ const envSchema = z.object({
   BARRIER_PCT: z.coerce.number().positive().default(0.5),
   HORIZON_MIN: z.coerce.number().positive().default(5),
   ASK_REGIME: bool("true"),
+  QUESTION_VERSIONS: list("tb-v1,tb-v2"),
 
   TAKER_FEE_BPS: z.coerce.number().nonnegative().default(5),
   MAKER_FEE_BPS: z.coerce.number().nonnegative().default(2),
@@ -69,7 +71,7 @@ export interface Config {
     refreshMs: number;
   };
   loop: { decisionIntervalMs: number; maxCallsPerRound: number; modelTimeoutMs: number };
-  question: { barrierPct: number; horizonMs: number; askRegime: boolean };
+  question: { barrierPct: number; horizonMs: number; askRegime: boolean; versions: QuestionVersion[] };
   costs: {
     takerFeeBps: number;
     makerFeeBps: number;
@@ -114,6 +116,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       barrierPct: e.BARRIER_PCT,
       horizonMs: Math.round(e.HORIZON_MIN * 60_000),
       askRegime: e.ASK_REGIME,
+      versions: e.QUESTION_VERSIONS.map((v) => {
+        if (!(QUESTION_VERSIONS as readonly string[]).includes(v)) throw new Error(`Unknown question version: ${v}`);
+        return v as QuestionVersion;
+      }),
     },
     costs: {
       takerFeeBps: e.TAKER_FEE_BPS,

@@ -1,7 +1,7 @@
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import type { ModelOutput, QuestionSpec } from "../model/types.js";
+import type { BarrierOutcome, ChoiceAnswer, ModelOutput, QuestionSpec } from "../model/types.js";
 import type { SymbolState } from "../types.js";
 
 export type Outcome = "up_first" | "down_first" | "neither" | "lost";
@@ -130,8 +130,18 @@ export class Ledger {
     return Number(r.lastInsertRowid);
   }
 
-  insertDecision(row: { stateId: number; model: string; questionVersion: string; ts: number; output: ModelOutput | null; error: string | null }): void {
+  /** One row per (state, model, question version). `barrier` is that version's answer; null when the call failed. */
+  insertDecision(row: {
+    stateId: number;
+    model: string;
+    questionVersion: string;
+    ts: number;
+    output: ModelOutput | null;
+    barrier: ChoiceAnswer<BarrierOutcome> | null;
+    error: string | null;
+  }): void {
     const o = row.output;
+    const b = row.barrier;
     this.db
       .prepare(
         `INSERT INTO decisions (state_id, model, model_version, question_version, ts, latency_ms, choice, p_up, p_down, p_neither,
@@ -145,11 +155,11 @@ export class Ledger {
         row.questionVersion,
         row.ts,
         o?.latencyMs ?? null,
-        o?.barrier.choice ?? null,
-        o?.barrier.probabilities.up_first ?? null,
-        o?.barrier.probabilities.down_first ?? null,
-        o?.barrier.probabilities.neither ?? null,
-        o?.barrier.confidence ?? null,
+        b?.choice ?? null,
+        b?.probabilities.up_first ?? null,
+        b?.probabilities.down_first ?? null,
+        b?.probabilities.neither ?? null,
+        b?.confidence ?? null,
         o?.regime?.choice ?? null,
         o?.regime ? JSON.stringify(o.regime.probabilities) : null,
         o?.usage?.inputTokens ?? null,

@@ -37,7 +37,7 @@ export class RandomModel implements Model {
   async evaluate(_state: SymbolState, question: QuestionSpec, _signal?: AbortSignal): Promise<ModelOutput> {
     const out: ModelOutput = {
       modelVersion: "random-v1",
-      barrier: randomChoice<BarrierOutcome>(BARRIER_OUTCOMES, this.rnd),
+      barriers: [{ version: question.variants[0]!.version, answer: randomChoice<BarrierOutcome>(BARRIER_OUTCOMES, this.rnd) }],
       latencyMs: 0,
     };
     if (question.regime) out.regime = randomChoice<Regime>(REGIMES, this.rnd);

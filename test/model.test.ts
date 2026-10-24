@@ -26,12 +26,22 @@ export function sampleState(over: Partial<SymbolState> = {}): SymbolState {
 }
 
 describe("question", () => {
-  it("states goal, horizon and cost, with descriptive criteria", () => {
-    expect(question.barrier.instructions).toMatch(/5 minutes/);
-    expect(question.barrier.instructions).toMatch(/\+0\.5%/);
-    expect(question.barrier.instructions).toMatch(/30 bps/);
-    expect(Object.keys(question.barrier.criteria)).toEqual(["up_first", "down_first", "neither"]);
+  it("every variant states goal, horizon and cost, with descriptive criteria", () => {
+    expect(question.variants.map((v) => v.version)).toEqual(["tb-v1", "tb-v2"]);
+    for (const v of question.variants) {
+      expect(v.question.instructions).toMatch(/5 minutes/);
+      expect(v.question.instructions).toMatch(/\+0\.5%/);
+      expect(v.question.instructions).toMatch(/30 bps/);
+      expect(Object.keys(v.question.criteria)).toEqual(["up_first", "down_first", "neither"]);
+    }
     expect(question.regime).toBeDefined();
+  });
+
+  it("tb-v2 carries no strategy hints", () => {
+    const v2 = question.variants.find((v) => v.version === "tb-v2")!.question.instructions;
+    expect(v2).not.toMatch(/mean-revert|manufactured|tend to continue/);
+    const v1 = question.variants.find((v) => v.version === "tb-v1")!.question.instructions;
+    expect(v1).toMatch(/mean-revert/);
   });
 });
 
@@ -42,8 +52,10 @@ describe("MockModel", () => {
   it("is deterministic and returns a distribution", async () => {
     const a = await m.evaluate(sampleState(), question, signal);
     const b = await m.evaluate(sampleState(), question, signal);
-    expect(a.barrier).toEqual(b.barrier);
-    const sum = Object.values(a.barrier.probabilities).reduce((x, y) => x + y, 0);
+    expect(a.barriers).toEqual(b.barriers);
+    expect(a.barriers).toHaveLength(1);
+    expect(a.barriers[0]!.version).toBe("tb-v1");
+    const sum = Object.values(a.barriers[0]!.answer.probabilities).reduce((x, y) => x + y, 0);
     expect(sum).toBeCloseTo(1);
     expect(a.regime?.choice).toBeDefined();
   });
@@ -52,14 +64,14 @@ describe("MockModel", () => {
     const spike = { returnsPct: { s30: 0.2, m1: 0.4, m5: 1.2, m15: 1.5, h1: 2 } };
     const small = await m.evaluate(sampleState({ tier: "small", ...spike }), question, signal);
     const large = await m.evaluate(sampleState({ tier: "large", ...spike }), question, signal);
-    expect(small.barrier.probabilities.down_first).toBeGreaterThan(small.barrier.probabilities.up_first);
-    expect(large.barrier.probabilities.up_first).toBeGreaterThan(large.barrier.probabilities.down_first);
+    expect(small.barriers[0]!.answer.probabilities.down_first).toBeGreaterThan(small.barriers[0]!.answer.probabilities.up_first);
+    expect(large.barriers[0]!.answer.probabilities.up_first).toBeGreaterThan(large.barriers[0]!.answer.probabilities.down_first);
   });
 
   it("raises P(neither) when realized vol is far below the barrier", async () => {
     const quiet = await m.evaluate(sampleState({ indicators1m: { ...sampleState().indicators1m, realizedVolPct5m: 0.05 } }), question, signal);
     const wild = await m.evaluate(sampleState({ indicators1m: { ...sampleState().indicators1m, realizedVolPct5m: 2 } }), question, signal);
-    expect(quiet.barrier.probabilities.neither).toBeGreaterThan(wild.barrier.probabilities.neither);
+    expect(quiet.barriers[0]!.answer.probabilities.neither).toBeGreaterThan(wild.barriers[0]!.answer.probabilities.neither);
   });
 });
 
@@ -68,7 +80,7 @@ describe("RandomModel", () => {
     const signal = new AbortController().signal;
     const a = await new RandomModel(7).evaluate(sampleState(), question, signal);
     const b = await new RandomModel(7).evaluate(sampleState(), question, signal);
-    expect(a.barrier).toEqual(b.barrier);
-    expect(Object.values(a.barrier.probabilities).reduce((x, y) => x + y, 0)).toBeCloseTo(1);
+    expect(a.barriers).toEqual(b.barriers);
+    expect(Object.values(a.barriers[0]!.answer.probabilities).reduce((x, y) => x + y, 0)).toBeCloseTo(1);
   });
 });

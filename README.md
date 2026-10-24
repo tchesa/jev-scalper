@@ -37,16 +37,24 @@ Runs as a single Node 22+ process. SQLite is Node's built-in `node:sqlite`, so t
 Universe: USDT perpetuals Binance tags as `Meme`, ranked by 24h quote volume (46 as of 2026-10-23), refreshed
 every 5 min. Override with `SYMBOLS=DOGEUSDT,1000PEPEUSDT`.
 
-## The question (`src/model/question.ts`, version `tb-v1`)
+## The question (`src/model/question.ts`)
 
 "Starting from the current mid, which barrier will the mid reach first within N minutes: +X% or −X%?" with
-the round-trip cost stated in the prompt, and three criteria: `up_first`, `down_first`, `neither`. An optional
-regime question (organic momentum / manipulation / listing event / exhaustion / quiet) rides along in the same
-request. Changing the wording must bump the version so answers never mix across wordings.
+the round-trip cost stated in the prompt, and three criteria: `up_first`, `down_first`, `neither`. Two wordings
+exist and `QUESTION_VERSIONS` picks which are asked, all in the same request so every state gets every answer:
+
+- `tb-v1` adds two strategy hints (small coins mean-revert, sharp moves on thin books are manufactured). In the
+  first 50-minute session it made Jev structurally bearish: P(down_first) averaged 0.45 against 17% realized.
+- `tb-v2` states goal, horizon and cost only, and asks for symmetric probabilities in a symmetric market.
+
+Each wording gets its own `decisions` row, so `pnpm eval` reports `jev [tb-v1]` and `jev [tb-v2]` separately on
+identical states. The mock and random baselines ignore wording and are recorded under the first version only.
+An optional regime question (organic momentum / manipulation / listing event / exhaustion / quiet) rides along.
+A new wording must get a new version string; never edit an existing one.
 
 ## Reading the report
 
-`pnpm eval` prints, per model: base rates, multi-class Brier score with skill vs climatology, log loss, argmax
+`pnpm eval` prints, per model and question version: base rates, multi-class Brier score with skill vs climatology, log loss, argmax
 accuracy, reliability buckets for P(up_first) and P(down_first), latency percentiles, a per-tier breakdown, and
 a *naive* after-cost EV per confidence threshold. The EV is not the fill engine: it assumes barrier hits pay
 exactly ±X% and `neither` exits at the 5-minute mid, minus the configured round-trip cost. Use it as a sanity

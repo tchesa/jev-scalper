@@ -48,9 +48,10 @@ export class MockModel implements Model {
     const [pUp, pDown, pNeither] = softmax3(dir * 0.9, -dir * 0.9, neitherLogit);
     const barrier = pick<BarrierOutcome>({ up_first: pUp, down_first: pDown, neither: pNeither });
 
+    // Wording-blind: one answer, recorded under the first variant only.
     const out: ModelOutput = {
       modelVersion: "mock-v1",
-      barrier,
+      barriers: [{ version: question.variants[0]!.version, answer: barrier }],
       latencyMs: Math.round(performance.now() - t0),
     };
     if (question.regime) {

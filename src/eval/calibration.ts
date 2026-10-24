@@ -12,6 +12,7 @@ import { roundTripCostBps } from "../state/builder.js";
 
 interface Row {
   model: string;
+  question_version: string;
   tier: string;
   symbol: string;
   mid: number;
@@ -37,7 +38,7 @@ const db = new DatabaseSync(dbPath, { readOnly: true });
 
 const rows = db
   .prepare(
-    `SELECT d.model, s.tier, s.symbol, s.mid, s.barrier_pct, d.p_up, d.p_down, d.p_neither, d.latency_ms, l.outcome, l.mid_300s
+    `SELECT d.model, d.question_version, s.tier, s.symbol, s.mid, s.barrier_pct, d.p_up, d.p_down, d.p_neither, d.latency_ms, l.outcome, l.mid_300s
      FROM decisions d JOIN states s ON s.id = d.state_id JOIN labels l ON l.state_id = s.id
      WHERE d.error IS NULL AND l.outcome != 'lost' AND s.ts >= ?`,
   )
@@ -131,10 +132,10 @@ function naiveEv(rs: Row[], costBps: number): void {
 }
 
 console.log(`ledger ${dbPath}: states ${totals.states}, labeled rows used ${rows.length}, lost ${totals.lost}, pending ${totals.pending}, model errors ${totals.errors}`);
-const models = [...new Set(rows.map((r) => r.model))].sort();
+const groups = [...new Set(rows.map((r) => `${r.model} [${r.question_version}]`))].sort();
 const costBps = roundTripCostBps(cfg);
-for (const model of models) {
-  const rs = rows.filter((r) => r.model === model);
+for (const model of groups) {
+  const rs = rows.filter((r) => `${r.model} [${r.question_version}]` === model);
   summarize(model, rs);
   if (rs.length < minN) {
     console.log(`   (fewer than ${minN} labeled rows; buckets and EV skipped)`);
@@ -148,4 +149,4 @@ for (const model of models) {
     if (t.length >= minN) summarize(`${model} / tier ${tier}`, t);
   }
 }
-if (!models.length) console.log("no labeled decisions yet; run the collector for at least one horizon");
+if (!groups.length) console.log("no labeled decisions yet; run the collector for at least one horizon");
