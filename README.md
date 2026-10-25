@@ -76,7 +76,13 @@ pnpm ann:crawl        # every catalog's article list back to 2019, cached under 
 pnpm ann:events       # match notices to tracked meme contracts, fetch bodies, measure the price reaction
 pnpm ann:run          # ask Jev (plus mock and random) about every measured event, anonymized by default
 pnpm ann:eval         # what announcements do by kind, and model calibration at 1 h and 24 h
+pnpm ann:poll         # live forward test: poll the feed every 5 s, ask Jev on publication, record feed lag
+pnpm ann:label        # fill reactions for polled events older than 25 h from REST 1-minute bars
 ```
+
+Findings so far are in REPORT-announcements.md: the tradeable effect is the spot-listing pump on tokens that
+already trade as perps; a title rule finds those events and Jev adds a label, not a better list. The forward
+test runs on all USDⓈ-M perps with pre-registered pass criteria (report section 7).
 
 - **Source**: the public CMS endpoints the Binance website uses (list per catalog, detail per article). Bodies
   are a JSON node tree; `bodyToText` flattens them.

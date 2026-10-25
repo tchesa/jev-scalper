@@ -2,6 +2,7 @@
  * Build the event list: announcements that concern a tracked meme contract, with the measured price reaction.
  *
  *   pnpm ann:events [--cache data/announcements] [--vision data/binance-vision] [--out data/announcements/events.json]
+ *                   [--assets file.json]   # explicit TrackedAsset list instead of today's Meme-tagged perps
  *
  * Candidates: title mentions a tracked base asset, or the title is a batch notice (leverage, margin, funding,
  * delisting, risk tag) whose body may list many symbols. Details are fetched only for candidates.
@@ -25,6 +26,7 @@ export interface AnnEvent {
   perp: string;
   spot: string | null;
   perpOnboard: number;
+  group: string;
   kind: EventKind;
   assetsInNotice: number; // how many tracked assets the same notice mentions
   reaction: Reaction | null;
@@ -43,7 +45,7 @@ export async function trackedAssets(): Promise<TrackedAsset[]> {
     .filter((s) => s.quoteAsset === "USDT" && s.contractType === "PERPETUAL" && (s.underlyingSubType ?? []).some((t) => /meme/i.test(t)))
     .map((s) => {
       const base = s.baseAsset.replace(/^(1000000|1000|1M)(?=[A-Z])/, "");
-      return { base, perp: s.symbol, spot: spotBases.has(base) ? `${base}USDT` : null, perpOnboard: s.onboardDate };
+      return { base, perp: s.symbol, spot: spotBases.has(base) ? `${base}USDT` : null, perpOnboard: s.onboardDate, group: "meme" };
     });
 }
 
@@ -54,7 +56,10 @@ async function main(): Promise<void> {
   const vision = arg("vision", "data/binance-vision");
   const out = arg("out", `${cache}/events.json`);
   const index = JSON.parse(readFileSync(`${cache}/index.json`, "utf8")) as ListedArticle[];
-  const assets = await trackedAssets();
+  const assetsFile = arg("assets", "");
+  const assets: TrackedAsset[] = assetsFile
+    ? (JSON.parse(readFileSync(assetsFile, "utf8")) as TrackedAsset[]).map((a) => ({ ...a, strict: a.strict ?? a.group === "dead" }))
+    : await trackedAssets();
   log.info("loaded", { articles: index.length, assets: assets.length });
 
   const candidates = index.filter((a) => matchAssets(a, assets).length > 0 || BATCH.test(a.title));
@@ -78,6 +83,7 @@ async function main(): Promise<void> {
         perp: asset.perp,
         spot: asset.spot,
         perpOnboard: asset.perpOnboard,
+        group: asset.group ?? "meme",
         kind: eventKind(d.title),
         assetsInNotice: hits.length,
         reaction: null,

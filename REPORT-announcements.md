@@ -106,27 +106,90 @@ excludes zero at the 60-second entry, but the median is zero, nearly as many top
 costs as gain more, and removing three events removes the result. This is a positive-skew lottery with
 positive expectation on 82 draws, not a demonstrated edge. The mock's ranking, by contrast, is worthless.
 
-## 6. Verdict and what would settle it
+## 6. Review checks (2026-10-25, after the track review)
 
-Jev reads announcements usefully (event type, passing mentions, novelty) and ranks them better than a rule, on
-anonymized text, at 240 ms. The money question is open: a tail-driven +1 to +4 % mean in the top decile on a
-few dozen events, with survivorship in the token list, is a lead, not a strategy.
+Counts reconciled from the ledger: 819 events; by year 2019: 1, 2020: 5, 2021: 51, 2022: 27, 2023: 83,
+2024: 260, 2025: 282, 2026: 110; the kind table in section 3 omitted funding (7), alpha (1) and one risk-tag row.
 
-Pre-registered forward test, to be written down before it starts:
+**Out of sample, properly.** Test half = the latest 410 events (2024-12-10 to 2026-10-20). Jev's top decile
+(41 events): mean +8.1 %, bootstrap CI [0.7, 17.4], median +0.2 %; without its three best events (TUT +115 %,
+GIGGLE +113 %, TRUMP +66 %): +1.0 %, CI [−2.1, 4.2]. The recalibration gain over base rates is 0.005 with CI
+[−0.001, 0.011], so not established. The AUC is: 0.59 with CI [0.53, 0.68].
 
-1. **Fix survivorship.** Add every token that ever had a Meme tag or a USDⓈ-M contract and was later removed
-   (from the delisting catalog), measure on whatever market existed. Rerun. Pass: top-decile mean 1 h return
-   still above costs with the bootstrap interval excluding zero after removing the three best events.
-2. **Live forward test, no trading.** Poll the CMS list endpoints every few seconds, ask Jev on publication,
-   log P(up, 1 h) and the realized reaction from the live streams. Decision at 100 new events: top-quintile
-   mean 1 h return above 0.5 % and median above zero, else close this track.
-3. **Only then** the pessimistic fill engine from the original build order, on announcement events only:
-   taker entry at the first print after the model answers, exit at 1 h or at a stop, real fees and funding.
+**The three outliers are real.** TUT and GIGGLE were spot-listing notices for tokens whose perp had launched
+one to two weeks earlier; the perp moved 35 % to 56 % inside the publication minute on $5M to $10M of volume
+and kept going (+32 % and +63 % even entering five minutes later). TRUMP's +66 % is the Jan 19 launch mania
+attached to an Earn/Convert notice, not a reaction to it.
 
-What not to do: trade on the current ranking. The expected value may be positive, but the distribution says
-most trades lose and a few pay for everything, and we have not seen enough of the few.
+**Kind-only baseline.** Ranking test events by their title-kind's mean 1 h return learned on the earlier half
+gives AUC 0.48 and a top decile of +1.0 % (−0.3 % without its best three). Ranking by Jev's own event label
+the same way gives AUC 0.52. Jev's probability gives 0.59. Within kinds on the test half, Jev's AUC is 0.73 on
+spot-listing titles (n 75), 0.75 on delistings (n 56), 0.87 on "other" (n 45), and chance on leverage/margin
+(0.48, n 168) and promotions (0.44, n 37). So Jev does rank within kinds, not only between them.
 
-## 7. Reproducing
+**But one cheap rule captures the money.** A listing title ("Will List", "Vote to List results", not a margin,
+Earn or Convert add-on, not a futures launch) for a token whose perp already existed at publication:
+
+| set | n | mean 1 h | CI | median | > cost | mean at +5 min | without best 3 |
+|---|---|---|---|---|---|---|---|
+| listing rule, perp existed | 13 | +15.6 % | [−5, +42] | +1.4 % | 62 % | +7.2 % | −4.0 % |
+| Jev top decile | 82 | +4.3 % | [0.7, 9.4] | +0.1 % | 41 % | +2.6 % | +0.8 % |
+| Jev top decile excluding rule events | 81 | +1.3 % | [−0.5, 3.5] | +0.0 % | 41 % | +1.1 % | −0.1 % |
+| everything outside the rule | 806 | −0.1 % | [−0.4, 0.3] | −0.1 % | 34 % | 0.0 % | |
+| out of sample, rule | 10 | +19.6 % | [−7, +54] | +1.9 % | 70 % | +9.1 % | −6.7 % |
+| out of sample, Jev top decile excluding rule | 40 | +1.8 % | [−2.4, 6.9] | −0.4 % | 35 % | +1.6 % | −1.3 % |
+
+Jev puts 8 of the 13 rule events in its top decile (mean P(up) 0.36 on them vs 0.13 elsewhere), which is
+where its top-decile return comes from. Outside those events its ranking has no money in it. Jev's reading is
+not wrong: it labels 11 of the 13 "spot_listing" correctly and its AUC within the 13 is 0.78. It is just that
+a regex finds the same 13.
+
+**Cost sensitivity** (Jev top decile, full sample, mean net 1 h return): +4.0 % at 0.3 % cost, +3.3 % at 1 %,
++2.3 % at 2 %; without the best three: +0.5 %, −0.2 %, −1.2 %. At realistic news-spike slippage the ranking
+outside the listing events loses money.
+
+**Survivorship.** Binance has removed only 31 USDT perps outright in its history; delisted memes stay in
+`exchangeInfo` as settling and were already tracked, so the meme list is nearly complete. The 31 dead contracts
+(none obviously memes: LUNA, MATIC, EOS, SRM, ...) were run as a separate group with strict matching:
+354 events, 244 measurable, on 30 tokens. Jev's 1 h AUC on this group is 0.62, the same as on memes, so the
+classifier result replicates on tokens it never saw in the meme set. The money result does not: Jev's top
+decile among dead tokens returned +0.6 % against +0.6 % for the rest, and the group contains no
+listing-rule events (these tokens were listed on spot before their perps existed). Pooled with memes
+(1,063 events) the top decile is +2.5 %, +0.5 % without its best three. The one large delisting reaction in
+the data is LUNA on 2022-05-12 (−63 % in the hour), which Jev scored P(up) = 0.03. Survivorship was not
+hiding a better result.
+
+## 7. Verdict and the forward test
+
+- Jev reads announcements well: event type, passing mentions, novelty, and a within-kind ranking that is
+  real (AUC 0.59 out of sample, interval above 0.5). That is a classifier result, and it held on anonymized
+  text.
+- The tradeable effect in this data is the spot-listing pump on tokens that already trade as perps: 13 meme
+  events in three years, median +1.4 %, fat tails both ways, and most of the move inside the first minute.
+  A title rule finds them; Jev adds a cleaner label, not a better list.
+- Everything else Jev ranks highly is noise after costs.
+
+So the claim that survives is narrower than "Jev has edge on announcements": **speed on spot-listing notices
+for perp-listed tokens is the edge, and Jev is an adequate but unnecessary classifier for them.** With 13 events
+the size of that edge is unknown; the rule's interval includes zero.
+
+Pre-registered forward test (live poller is built: `pnpm ann:poll`, labels via `pnpm ann:label`):
+
+1. Universe: all USDⓈ-M perpetuals, not only memes, to multiply the event rate; group recorded per event.
+2. Record for every notice: publish time, time the poller first saw it (feed lag), Jev's answers, and the
+   reaction measured from REST 1-minute bars after 25 hours.
+3. Decision after 30 listing-rule events (expected within one to two months on all perps), using the same
+   rule as above, no Jev in the rule:
+   - pass if the mean 1 h return entering at the first full minute after the poller saw the notice is above
+     1 % with a bootstrap interval above zero, and the median is above costs;
+   - separately, Jev's P(up, 1 h) must rank those events with AUC above 0.65 to justify keeping it in the loop
+     at all; otherwise the rule alone goes forward.
+4. Only after a pass: the pessimistic fill engine on listing events, taker entry at the first print after
+   detection, exit at 1 h or a 5 % stop, real fees and funding.
+
+Not to be done: trading on the current ranking, or on the rule, before the forward test.
+
+## 8. Reproducing
 
 ```bash
 pnpm ann:crawl && pnpm ann:events

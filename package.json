@@ -19,7 +19,9 @@
     "ann:crawl": "node --no-warnings=ExperimentalWarning --import tsx src/announcements/crawl.ts",
     "ann:events": "node --no-warnings=ExperimentalWarning --import tsx src/announcements/events.ts",
     "ann:run": "node --no-warnings=ExperimentalWarning --import tsx src/announcements/run.ts",
-    "ann:eval": "node --no-warnings=ExperimentalWarning --import tsx src/announcements/eval.ts"
+    "ann:eval": "node --no-warnings=ExperimentalWarning --import tsx src/announcements/eval.ts",
+    "ann:poll": "node --no-warnings=ExperimentalWarning --import tsx src/announcements/poll.ts",
+    "ann:label": "node --no-warnings=ExperimentalWarning --import tsx src/announcements/label.ts"
   },
   "dependencies": {
     "@typesafe-ai/sdk": "^0.7.0",

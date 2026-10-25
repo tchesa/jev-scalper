@@ -3,6 +3,7 @@
  *
  *   pnpm ann:run [--events data/announcements/events.json] [--db data/announcements.sqlite]
  *                [--models jev,mock,random] [--anonymize true|false] [--concurrency 6] [--limit N]
+ *                [--skip-existing true]   # do not re-ask a model about an event it already answered
  */
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -86,6 +87,7 @@ async function main(): Promise<void> {
   const anonymize = arg("anonymize", "true") !== "false";
   const concurrency = Number(arg("concurrency", "6"));
   const limit = Number(arg("limit", "0"));
+  const skipExisting = arg("skip-existing", "false") === "true";
   const events = (JSON.parse(readFileSync(arg("events", "data/announcements/events.json"), "utf8")) as AnnEvent[]).filter((e) => e.reaction && e.reaction.ret.h1 !== null);
   const todo = limit ? events.slice(-limit) : events;
   const ledger = new AnnLedger(arg("db", "data/announcements.sqlite"));
@@ -93,10 +95,11 @@ async function main(): Promise<void> {
   log.info("start", { runId, events: todo.length, models: cfg.models, anonymize, version: ANN_QUESTION_VERSION });
 
   const upsertEvent = ledger.db.prepare(
-    `INSERT OR IGNORE INTO ann_events (code, base, published_at, kind, catalog, title, market, ret_h1, ret_h24, ret_m5, ret_m30, ret_h1_slow, max_up_1h, max_down_1h, pre_h1, pre_h24, volume_ratio_1h, label_h1, label_h24, state_json)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT OR IGNORE INTO ann_events (code, base, published_at, kind, grp, catalog, title, market, ret_h1, ret_h24, ret_m5, ret_m30, ret_h1_slow, max_up_1h, max_down_1h, pre_h1, pre_h24, volume_ratio_1h, label_h1, label_h24, state_json)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
   const getId = ledger.db.prepare("SELECT id FROM ann_events WHERE code = ? AND base = ?");
+  const hasDecision = ledger.db.prepare("SELECT 1 FROM ann_decisions WHERE event_id = ? AND model = ? AND question_version = ? AND anonymized = ? AND error IS NULL");
   const insertDecision = ledger.db.prepare(
     `INSERT OR REPLACE INTO ann_decisions (event_id, model, question_version, anonymized, ts, latency_ms, event_choice, p_h1_up, p_h1_down, p_h1_flat, p_h24_up, p_h24_down, p_h24_flat, novelty, answers_json, input_tokens, error)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -122,9 +125,10 @@ async function main(): Promise<void> {
       if (!e) return;
       const r = e.reaction!;
       const state = buildState(e, anonymize);
-      upsertEvent.run(e.code, e.base, e.publishedAt, e.kind, e.catalog, e.title, r.market, r.ret.h1, r.ret.h24, r.ret.m5, r.ret.m30, r.retSlow.h1, r.maxUp1h, r.maxDown1h, r.pre.h1, r.pre.h24, r.volumeRatio1h, impactLabel(r.ret.h1, H1_PCT), impactLabel(r.ret.h24, H24_PCT), JSON.stringify(state));
+      upsertEvent.run(e.code, e.base, e.publishedAt, e.kind, e.group ?? "meme", e.catalog, e.title, r.market, r.ret.h1, r.ret.h24, r.ret.m5, r.ret.m30, r.retSlow.h1, r.maxUp1h, r.maxDown1h, r.pre.h1, r.pre.h24, r.volumeRatio1h, impactLabel(r.ret.h1, H1_PCT), impactLabel(r.ret.h24, H24_PCT), JSON.stringify(state));
       const eventId = (getId.get(e.code, e.base) as { id: number }).id;
       for (const model of cfg.models) {
+        if (skipExisting && hasDecision.get(eventId, model, ANN_QUESTION_VERSION, anonymize ? 1 : 0)) continue;
         let ans: Answers | null = null;
         let error: string | null = null;
         try {

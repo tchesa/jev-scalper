@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS ann_events (
   base TEXT NOT NULL,
   published_at INTEGER NOT NULL,
   kind TEXT NOT NULL,
+  grp TEXT NOT NULL DEFAULT 'meme',
   catalog TEXT,
   title TEXT NOT NULL,
   market TEXT,
@@ -16,6 +17,8 @@ CREATE TABLE IF NOT EXISTS ann_events (
   max_up_1h REAL, max_down_1h REAL, pre_h1 REAL, pre_h24 REAL, volume_ratio_1h REAL,
   label_h1 TEXT, label_h24 TEXT,
   state_json TEXT NOT NULL,
+  seen_at INTEGER,          -- live poller: when the notice was first seen
+  perp TEXT, spot TEXT, perp_onboard INTEGER,
   UNIQUE(code, base)
 );
 CREATE TABLE IF NOT EXISTS ann_decisions (

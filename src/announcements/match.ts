@@ -8,7 +8,11 @@ export interface TrackedAsset {
   base: string; // e.g. PEPE
   perp: string; // e.g. 1000PEPEUSDT
   spot: string | null; // e.g. PEPEUSDT when a spot pair exists
-  perpOnboard: number; // ms
+  perpOnboard: number; // ms; 0 when unknown
+  /** Reporting group, e.g. "meme" or "dead". */
+  group?: string;
+  /** Match only pair-like or parenthesised forms (for tokens whose name is an ordinary word). */
+  strict?: boolean;
 }
 
 /** Base assets that are also ordinary words; require an uppercase whole-word match plus a crypto cue. */
@@ -40,9 +44,9 @@ export function matchAssets(a: Pick<ListedArticle, "title"> & Partial<Pick<Artic
     const re = tokenPattern(asset.base);
     const pairLike = pairLikePattern(asset.base).test(hay) || (pairs.length > 0 && pairLikePattern(asset.base).test(pairs));
     let hit = pairLike || re.test(title) || re.test(text);
-    if (hit && !pairLike && (asset.base.length <= 2 || AMBIGUOUS.has(asset.base))) {
+    if (hit && !pairLike && (asset.strict || asset.base.length <= 2 || AMBIGUOUS.has(asset.base))) {
       // Plain-word hits for ambiguous names need a crypto cue within 80 chars; one- and two-letter tickers need a pair form.
-      if (asset.base.length <= 2) hit = false;
+      if (asset.strict || asset.base.length <= 2) hit = false;
       else {
         const near = new RegExp(`(?<![A-Za-z0-9])${esc(asset.base)}(?![A-Za-z0-9])[^\\n]{0,80}`, "g");
         hit = [...hay.matchAll(near)].some((m) => CUE.test(m[0]));
