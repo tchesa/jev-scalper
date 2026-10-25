@@ -4,14 +4,17 @@
   "private": true,
   "description": "Paper-trading research harness: Jev as a signal classifier on Binance meme perps",
   "type": "module",
-  "engines": { "node": ">=22.13" },
+  "engines": {
+    "node": ">=22.13"
+  },
   "scripts": {
     "dev": "node --no-warnings=ExperimentalWarning --import tsx src/main.ts",
     "start": "node --no-warnings=ExperimentalWarning --import tsx src/main.ts",
     "eval": "node --no-warnings=ExperimentalWarning --import tsx src/eval/calibration.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "jev:ping": "node --import tsx src/scripts/jevPing.ts"
+    "jev:ping": "node --import tsx src/scripts/jevPing.ts",
+    "replay": "node --no-warnings=ExperimentalWarning --import tsx src/replay/run.ts"
   },
   "dependencies": {
     "@typesafe-ai/sdk": "^0.7.0",

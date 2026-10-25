@@ -4,11 +4,11 @@ import { MockModel } from "./mock.js";
 import { RandomModel } from "./random.js";
 import type { Model } from "./types.js";
 
-export function createModels(cfg: Config): Model[] {
+export function createModels(cfg: Config, opts: { jevRetries?: number } = {}): Model[] {
   return cfg.models.map((name): Model => {
     switch (name) {
       case "jev":
-        return new JevModel(cfg.typesafe.apiKey!, cfg.typesafe.model, cfg.loop.modelTimeoutMs);
+        return new JevModel(cfg.typesafe.apiKey!, cfg.typesafe.model, cfg.loop.modelTimeoutMs, opts.jevRetries ?? 0);
       case "mock":
         return new MockModel();
       case "random":

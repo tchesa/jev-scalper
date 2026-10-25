@@ -14,7 +14,7 @@ export function sampleState(over: Partial<SymbolState> = {}): SymbolState {
     ts: "2026-10-23T00:00:00.000Z",
     tier: "small",
     daysSinceListing: 120,
-    book: { mid: 1, spreadBps: 5, imbalanceTop5: 0, depthUsd: { bps10: [1e4, 1e4], bps25: [3e4, 3e4], bps50: [6e4, 6e4] }, bids: [[0.9999, 1000]], asks: [[1.0001, 1000]] },
+    book: { mid: 1, spreadBps: 5, depthPct1Usd: [2e5, 2e5], imbalanceTop5: 0, depthUsd: { bps10: [1e4, 1e4], bps25: [3e4, 3e4], bps50: [6e4, 6e4] }, bids: [[0.9999, 1000]], asks: [[1.0001, 1000]] },
     returnsPct: { s30: 0, m1: 0, m5: 0, m15: 0, h1: 0 },
     trades: { count1m: 50, buyUsd1m: 5e4, sellUsd1m: 5e4, cvdUsd1m: 0, cvdUsd5m: 0, vwap1m: 1, vwap5m: 1, vwapDistBps5m: 0, largestUsd1m: 1e3, recent: [] },
     indicators1m: { sma20: 1, sma50: 1, ema20: 1, rsi14: 50, realizedVolPct1m: 0.1, realizedVolPct5m: 0.3, rangePos1h: 0.5, rangePos24h: 0.5, range5mPct: 0.4 },

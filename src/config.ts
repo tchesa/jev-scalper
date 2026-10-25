@@ -34,6 +34,12 @@ const envSchema = z.object({
   MODEL_TIMEOUT_MS: z.coerce.number().int().positive().default(4_000),
 
   BARRIER_PCT: z.coerce.number().positive().default(0.5),
+  // fixed: BARRIER_PCT. vol: BARRIER_VOL_MULT x realized vol over the horizon, clamped to [floor, cap].
+  BARRIER_MODE: z.enum(["fixed", "vol"]).default("fixed"),
+  BARRIER_VOL_MULT: z.coerce.number().positive().default(1),
+  BARRIER_FLOOR_PCT: z.coerce.number().positive().default(0.3),
+  BARRIER_CAP_PCT: z.coerce.number().positive().default(3),
+  STATE_BARS_1M: z.coerce.number().int().min(0).max(120).default(0),
   HORIZON_MIN: z.coerce.number().positive().default(5),
   ASK_REGIME: bool("true"),
   QUESTION_VERSIONS: list("tb-v1,tb-v2"),
@@ -71,7 +77,17 @@ export interface Config {
     refreshMs: number;
   };
   loop: { decisionIntervalMs: number; maxCallsPerRound: number; modelTimeoutMs: number };
-  question: { barrierPct: number; horizonMs: number; askRegime: boolean; versions: QuestionVersion[] };
+  question: {
+    barrierPct: number;
+    barrierMode: "fixed" | "vol";
+    barrierVolMult: number;
+    barrierFloorPct: number;
+    barrierCapPct: number;
+    horizonMs: number;
+    askRegime: boolean;
+    versions: QuestionVersion[];
+  };
+  state: { bars1m: number };
   costs: {
     takerFeeBps: number;
     makerFeeBps: number;
@@ -114,6 +130,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     },
     question: {
       barrierPct: e.BARRIER_PCT,
+      barrierMode: e.BARRIER_MODE,
+      barrierVolMult: e.BARRIER_VOL_MULT,
+      barrierFloorPct: e.BARRIER_FLOOR_PCT,
+      barrierCapPct: e.BARRIER_CAP_PCT,
       horizonMs: Math.round(e.HORIZON_MIN * 60_000),
       askRegime: e.ASK_REGIME,
       versions: e.QUESTION_VERSIONS.map((v) => {
@@ -121,6 +141,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
         return v as QuestionVersion;
       }),
     },
+    state: { bars1m: e.STATE_BARS_1M },
     costs: {
       takerFeeBps: e.TAKER_FEE_BPS,
       makerFeeBps: e.MAKER_FEE_BPS,

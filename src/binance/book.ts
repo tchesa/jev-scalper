@@ -1,6 +1,7 @@
 import type { Level } from "../types.js";
 import type { DepthEvent } from "./ws.js";
 import type { DepthSnapshot } from "./rest.js";
+import type { BookView } from "../market/feedView.js";
 
 export type ApplyResult = "applied" | "dropped" | "buffered" | "desync";
 
@@ -11,7 +12,8 @@ export type ApplyResult = "applied" | "dropped" | "buffered" | "desync";
  *  - first applied event must satisfy U <= lastUpdateId <= u
  *  - every later event must have pu == previous u, else resync
  */
-export class LocalBook {
+export class LocalBook implements BookView {
+  readonly hasDepth = true;
   private bids = new Map<number, number>();
   private asks = new Map<number, number>();
   private sortedBids: Level[] | null = null;

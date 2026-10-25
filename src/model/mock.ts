@@ -36,7 +36,7 @@ export class MockModel implements Model {
     const momentum = follow * (ret5 / b) * 0.6 + follow * (ret1 / b) * 0.4;
     const flowUsd = state.trades.cvdUsd1m;
     const turnover = Math.max(state.trades.buyUsd1m + state.trades.sellUsd1m, 1);
-    const flow = (flowUsd / turnover) * 0.8 + state.book.imbalanceTop5 * 0.4;
+    const flow = (flowUsd / turnover) * 0.8 + (state.book.imbalanceTop5 ?? 0) * 0.4;
     const rsiTilt = state.indicators1m.rsi14 === null ? 0 : ((50 - state.indicators1m.rsi14) / 50) * (follow === 1 ? -0.3 : 0.6);
     const dir = Math.max(-2, Math.min(2, momentum + flow + rsiTilt));
 
@@ -56,7 +56,7 @@ export class MockModel implements Model {
     };
     if (question.regime) {
       const spikes = Math.abs(ret5) > 2 * b;
-      const thin = Math.min(...state.book.depthUsd.bps25) < 50_000;
+      const thin = state.book.depthUsd ? Math.min(...state.book.depthUsd.bps25) < 50_000 : Math.min(...state.book.depthPct1Usd) < 500_000;
       const regimeScores: Record<Regime, number> = {
         organic_momentum: spikes && !thin && (state.perp.oiChangePct5m ?? 0) > 0.5 ? 2 : 0,
         manipulation: spikes && thin ? 2 : 0,

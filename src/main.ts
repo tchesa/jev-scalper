@@ -9,7 +9,7 @@ import { SymbolFeed } from "./market/symbolFeed.js";
 import { loadUniverse } from "./market/universe.js";
 import { createModels } from "./model/index.js";
 import { buildQuestion } from "./model/question.js";
-import type { Model, ModelOutput } from "./model/types.js";
+import type { Model, ModelOutput, QuestionSpec } from "./model/types.js";
 import { prefilter } from "./prefilter.js";
 import { buildState } from "./state/builder.js";
 
@@ -68,7 +68,7 @@ class App {
       runId: this.runId,
       models: this.models.map((m) => m.name),
       symbols: [...this.feeds.keys()],
-      barrierPct: this.cfg.question.barrierPct,
+      barrier: this.cfg.question.barrierMode === "fixed" ? `${this.cfg.question.barrierPct}%` : `${this.cfg.question.barrierVolMult}x vol, ${this.cfg.question.barrierFloorPct}-${this.cfg.question.barrierCapPct}%`,
       horizonMin: this.cfg.question.horizonMs / 60_000,
       questionVersions: this.question.variants.map((v) => v.version),
     });
@@ -241,8 +241,9 @@ class App {
         const state = buildState(feed, this.cfg, now);
         if (!state) return;
         const stateId = this.ledger.insertState({ runId: this.runId, roundId, ts: now, state, horizonMs: this.cfg.question.horizonMs, prefilterScore: score });
-        this.labeler.track(stateId, feed.symbol, now, feed.book.mid()!, this.cfg.question.barrierPct, this.cfg.question.horizonMs);
-        await Promise.all(this.models.map((m) => this.ask(m, stateId, state)));
+        this.labeler.track(stateId, feed.symbol, now, feed.book.mid()!, state.barrier.upPct, this.cfg.question.horizonMs);
+        const question = buildQuestion(this.cfg, state.barrier.upPct);
+        await Promise.all(this.models.map((m) => this.ask(m, stateId, state, question)));
       });
       await Promise.all(jobs);
 
@@ -255,14 +256,14 @@ class App {
     }
   }
 
-  private async ask(model: Model, stateId: number, state: Parameters<Model["evaluate"]>[0]): Promise<void> {
+  private async ask(model: Model, stateId: number, state: Parameters<Model["evaluate"]>[0], question: QuestionSpec): Promise<void> {
     const ac = new AbortController();
     const timer = setTimeout(() => ac.abort(), this.cfg.loop.modelTimeoutMs);
     let output: ModelOutput | null = null;
     let error: string | null = null;
     try {
       this.calls++;
-      output = await model.evaluate(state, this.question, ac.signal);
+      output = await model.evaluate(state, question, ac.signal);
     } catch (err) {
       this.errors++;
       error = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
@@ -277,7 +278,7 @@ class App {
         log.debug("decision", { model: model.name, version, symbol: state.symbol, choice: answer.choice, p: answer.probabilities, regime: output.regime?.choice, latencyMs: output.latencyMs });
       }
     } else {
-      for (const v of this.question.variants) {
+      for (const v of question.variants) {
         this.ledger.insertDecision({ stateId, model: model.name, questionVersion: v.version, ts, output: null, barrier: null, error });
       }
     }

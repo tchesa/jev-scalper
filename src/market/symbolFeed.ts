@@ -4,6 +4,7 @@ import { getDepthSnapshot, getKlines } from "../binance/rest.js";
 import type { Kline, MarkUpdate, SymbolMeta, Ticker24h, Trade } from "../types.js";
 import { Ring } from "./ring.js";
 import { logger } from "../log.js";
+import type { FeedView } from "./feedView.js";
 
 const log = logger("feed");
 
@@ -13,7 +14,7 @@ export interface MidSample {
 }
 
 /** Everything the state builder and labeler need for one symbol, fed by streams + REST polls. */
-export class SymbolFeed {
+export class SymbolFeed implements FeedView {
   readonly book = new LocalBook();
   readonly trades = new Ring<Trade>(5000);
   readonly mids = new Ring<MidSample>(3700); // ~1h at 1 sample/s

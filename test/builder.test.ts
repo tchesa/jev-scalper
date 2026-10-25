@@ -50,7 +50,9 @@ describe("buildState", () => {
     expect(s.book.mid).toBe(1);
     expect(s.book.spreadBps).toBeCloseTo(2, 1);
     expect(s.book.bids).toHaveLength(5);
-    expect(s.book.depthUsd.bps25[0]).toBeGreaterThan(0);
+    expect(s.book.depthUsd!.bps25[0]).toBeGreaterThan(0);
+    expect(s.book.depthPct1Usd[0]).toBeGreaterThanOrEqual(s.book.depthUsd!.bps50[0]);
+    expect(s.bars1m).toBeUndefined();
     expect(s.returnsPct.s30).toBeCloseTo(0.03, 2);
     expect(s.returnsPct.m5).toBeCloseTo(0.3, 1);
     expect(s.trades.count1m).toBe(61);
@@ -64,6 +66,16 @@ describe("buildState", () => {
     expect(s.barrier).toEqual({ upPct: 0.5, downPct: 0.5, horizonMin: 5, roundTripCostBps: 30 });
     // Keep the payload small: Jev is billed per input token.
     expect(JSON.stringify(s).length).toBeLessThan(3000);
+  });
+
+  it("adds raw 1m bars and a vol-scaled barrier when configured", () => {
+    const c2 = loadConfig({ STATE_BARS_1M: "10", BARRIER_MODE: "vol", BARRIER_VOL_MULT: "2", BARRIER_FLOOR_PCT: "0.3", BARRIER_CAP_PCT: "3" });
+    const s = buildState(feed, c2, now)!;
+    expect(s.bars1m).toHaveLength(10);
+    expect(s.bars1m![9]![3]).toBeCloseTo(feed.klines[feed.klines.length - 1]!.close, 4);
+    expect(s.barrier.upPct).toBeGreaterThanOrEqual(0.3);
+    expect(s.barrier.upPct).toBeLessThanOrEqual(3);
+    expect(s.barrier.upPct).toBe(s.barrier.downPct);
   });
 
   it("returns null when the feed is not ready", () => {

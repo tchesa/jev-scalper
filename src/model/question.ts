@@ -60,8 +60,8 @@ const BUILDERS: Record<QuestionVersion, (x: number, mins: number, cost: number) 
  * The triple-barrier question in every configured wording, plus the optional regime question.
  * Every wording states the goal, the horizon and the cost context; bare labels like "long or short?" are avoided.
  */
-export function buildQuestion(cfg: Config): QuestionSpec {
-  const x = cfg.question.barrierPct;
+export function buildQuestion(cfg: Config, barrierPct: number = cfg.question.barrierPct): QuestionSpec {
+  const x = barrierPct;
   const mins = cfg.question.horizonMs / 60_000;
   const cost = roundTripCostBps(cfg);
   const variants: BarrierVariant[] = cfg.question.versions.map((version) => ({ version, question: BUILDERS[version](x, mins, cost) }));

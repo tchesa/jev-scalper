@@ -18,13 +18,13 @@ export class JevModel implements Model {
   readonly name = "jev";
   private readonly client: TypeSafeClient;
 
-  constructor(apiKey: string, private readonly model: string, timeoutMs: number) {
+  /** Live runs use no retries (a late answer is a stale answer). Replay can afford them. */
+  constructor(apiKey: string, private readonly model: string, timeoutMs: number, maxRetries = 0) {
     this.client = new TypeSafeClient({
       apiKey,
       defaultModel: model,
       timeout: timeoutMs,
-      // No retries: a late answer is a stale answer. The loop treats failure as "no trade".
-      retry: { maxRetries: 0 },
+      retry: { maxRetries },
       logLevel: "warn",
     });
   }

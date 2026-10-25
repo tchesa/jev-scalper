@@ -37,6 +37,32 @@ Runs as a single Node 22+ process. SQLite is Node's built-in `node:sqlite`, so t
 Universe: USDT perpetuals Binance tags as `Meme`, ranked by 24h quote volume (46 as of 2026-10-23), refreshed
 every 5 min. Override with `SYMBOLS=DOGEUSDT,1000PEPEUSDT`.
 
+## Barrier size
+
+`BARRIER_MODE=fixed` asks about ±`BARRIER_PCT`. In quiet hours that makes "neither" the answer 80–90% of the
+time, so most of the score measures predicting quiet. `BARRIER_MODE=vol` sets the barrier per state to
+`BARRIER_VOL_MULT` × the realized move expected over the horizon (20-bar 1-minute vol × √minutes), clamped to
+`[BARRIER_FLOOR_PCT, BARRIER_CAP_PCT]`. Code owns reachability; the model is asked about direction and
+completion. The barrier used is stored per state (`states.barrier_pct`) and the labeler uses that value.
+
+## Historical replay (`pnpm replay`)
+
+Drives the same state builder, prefilters, models, labeler and ledger from Binance Vision public dumps
+(aggTrades, 1m klines, mark-price and premium-index klines, 5-minute open interest, ±1% book depth) plus
+funding history from the REST API. One symbol-day replays in seconds; model calls run in a bounded pool.
+
+```bash
+BARRIER_MODE=vol STATE_BARS_1M=20 pnpm replay -- --symbol TRUMPUSDT --from 2025-01-19 --to 2025-01-20
+pnpm eval --db data/replay-TRUMPUSDT-2025-01-19.sqlite
+```
+
+Differences from live, all visible in the state: there is no historical best bid/ask (Binance stopped the
+`bookTicker` dumps in 2023), so bid and ask are the last sell-aggressor and buy-aggressor prints; there is no
+L2, so `imbalanceTop5`, `depthUsd` and the top-5 levels are omitted and only `depthPct1Usd` (±1 % notional
+from the depth dump) is present; funding is the last settled rate. States are anonymized by default
+(`symbol: "PERP"`, `ts: null`) so a model calibrated on LLM answers cannot recall a famous episode by name or
+date. Dumps are cached under `data/binance-vision/`. Pending labels at the end of the data are marked `lost`.
+
 ## The question (`src/model/question.ts`)
 
 "Starting from the current mid, which barrier will the mid reach first within N minutes: +X% or −X%?" with
@@ -83,7 +109,8 @@ src/model/     Model interface, question, Jev / mock / random implementations
 src/ledger/    SQLite schema and inserts
 src/labeler/   triple-barrier labeling from trade prints
 src/eval/      calibration report
-src/main.ts    orchestration
+src/replay/    Binance Vision loader, replay feed (virtual clock), replay runner
+src/main.ts    live orchestration
 ```
 
 ## Next (per the build order)

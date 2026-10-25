@@ -1,7 +1,8 @@
 import type { Config } from "../config.js";
-import type { SymbolFeed } from "../market/symbolFeed.js";
 import type { LiquidityTier, SymbolState } from "../types.js";
+import { barrierPctFor } from "./barrier.js";
 import { ema, pctChange, rangePosition, realizedVolPct, round, roundOrNull, rsi, sig, sma } from "./features.js";
+import type { FeedView } from "../market/feedView.js";
 
 export function liquidityTier(quoteVolume24h: number, cfg: Config): LiquidityTier {
   if (quoteVolume24h >= cfg.tiers.largeUsd) return "large";
@@ -19,7 +20,7 @@ export function roundTripCostBps(cfg: Config): number {
  * Build the compact JSON state for one symbol at time `now`.
  * Returns null when the feed is not ready. Everything the model sees is computed here.
  */
-export function buildState(feed: SymbolFeed, cfg: Config, now: number): SymbolState | null {
+export function buildState(feed: FeedView, cfg: Config, now: number): SymbolState | null {
   const book = feed.book;
   const mid = book.mid();
   const spread = book.spreadBps();
@@ -27,8 +28,9 @@ export function buildState(feed: SymbolFeed, cfg: Config, now: number): SymbolSt
   const ticker = feed.ticker;
   if (mid === null || spread === null || !mark || !ticker) return null;
 
-  const bids = book.getBids().slice(0, 5);
-  const asks = book.getAsks().slice(0, 5);
+  const hasDepth = book.hasDepth;
+  const bids = hasDepth ? book.getBids().slice(0, 5) : [];
+  const asks = hasDepth ? book.getAsks().slice(0, 5) : [];
   const bidNotional = bids.reduce((a, [p, q]) => a + p * q, 0);
   const askNotional = asks.reduce((a, [p, q]) => a + p * q, 0);
   const imbalance = bidNotional + askNotional > 0 ? (bidNotional - askNotional) / (bidNotional + askNotional) : 0;
@@ -82,7 +84,8 @@ export function buildState(feed: SymbolFeed, cfg: Config, now: number): SymbolSt
   const vol1m = realizedVolPct(closes, 20);
   const vol60 = realizedVolPct(closes, 60);
 
-  const barrier = cfg.question.barrierPct;
+  const barrier = barrierPctFor(cfg, closes);
+  const depth = (bps: number) => book.depthUsdWithin(bps).map((x) => round(x, 0)) as [number, number];
   const state: SymbolState = {
     symbol: feed.symbol,
     ts: new Date(now).toISOString(),
@@ -91,14 +94,7 @@ export function buildState(feed: SymbolFeed, cfg: Config, now: number): SymbolSt
     book: {
       mid: sig(mid),
       spreadBps: round(spread, 2),
-      imbalanceTop5: round(imbalance, 3),
-      depthUsd: {
-        bps10: book.depthUsdWithin(10).map((x) => round(x, 0)) as [number, number],
-        bps25: book.depthUsdWithin(25).map((x) => round(x, 0)) as [number, number],
-        bps50: book.depthUsdWithin(50).map((x) => round(x, 0)) as [number, number],
-      },
-      bids: bids.map(([p, q]) => [sig(p), round(p * q, 0)]),
-      asks: asks.map(([p, q]) => [sig(p), round(p * q, 0)]),
+      depthPct1Usd: depth(100),
     },
     returnsPct: {
       s30: roundOrNull(pctChange(midAt(30_000), mid), 3),
@@ -154,5 +150,14 @@ export function buildState(feed: SymbolFeed, cfg: Config, now: number): SymbolSt
       roundTripCostBps: roundTripCostBps(cfg),
     },
   };
+  if (hasDepth) {
+    state.book.imbalanceTop5 = round(imbalance, 3);
+    state.book.depthUsd = { bps10: depth(10), bps25: depth(25), bps50: depth(50) };
+    state.book.bids = bids.map(([p, q]) => [sig(p), round(p * q, 0)]);
+    state.book.asks = asks.map(([p, q]) => [sig(p), round(p * q, 0)]);
+  }
+  if (cfg.state.bars1m > 0) {
+    state.bars1m = closed.slice(-cfg.state.bars1m).map((k) => [sig(k.open), sig(k.high), sig(k.low), sig(k.close), round(k.quoteVolume, 0)]);
+  }
   return state;
 }

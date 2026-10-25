@@ -57,17 +57,22 @@ export type LiquidityTier = "large" | "mid" | "small" | "micro";
 /** The compact JSON sent to the model. All math happens before this is built. */
 export interface SymbolState {
   symbol: string;
-  ts: string; // ISO
+  ts: string | null; // ISO; null when anonymized for replay
   tier: LiquidityTier;
   daysSinceListing: number;
   book: {
     mid: number;
     spreadBps: number;
-    imbalanceTop5: number; // (bid - ask) / (bid + ask) notional, -1..1
-    depthUsd: { bps10: [number, number]; bps25: [number, number]; bps50: [number, number] }; // [bid, ask]
-    bids: Level[]; // top 5
-    asks: Level[];
+    /** Notional resting within 1% of mid on each side: [bid, ask]. Always present. */
+    depthPct1Usd: [number, number];
+    /** Fields below need a live L2 book; absent in historical replay. */
+    imbalanceTop5?: number; // (bid - ask) / (bid + ask) notional, -1..1
+    depthUsd?: { bps10: [number, number]; bps25: [number, number]; bps50: [number, number] }; // [bid, ask]
+    bids?: Level[]; // top 5
+    asks?: Level[];
   };
+  /** Last N closed 1m bars, oldest first: [open, high, low, close, quoteVolumeUsd]. Only when STATE_BARS_1M > 0. */
+  bars1m?: Array<[number, number, number, number, number]>;
   returnsPct: { s30: number | null; m1: number | null; m5: number | null; m15: number | null; h1: number | null };
   trades: {
     count1m: number;

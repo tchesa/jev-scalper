@@ -1,5 +1,5 @@
 import type { Config } from "./config.js";
-import type { SymbolFeed } from "./market/symbolFeed.js";
+import type { FeedView } from "./market/feedView.js";
 
 export interface PrefilterResult {
   pass: boolean;
@@ -9,7 +9,7 @@ export interface PrefilterResult {
 }
 
 /** Cheap checks on raw feed data; runs for every symbol every round before any state is built. */
-export function prefilter(feed: SymbolFeed, cfg: Config, now: number): PrefilterResult {
+export function prefilter(feed: FeedView, cfg: Config, now: number): PrefilterResult {
   const reasons: string[] = [];
   if (!feed.isReady()) return { pass: false, reasons: ["not_ready"], score: 0 };
   if (!feed.isFresh(now)) reasons.push("stale");
@@ -17,8 +17,10 @@ export function prefilter(feed: SymbolFeed, cfg: Config, now: number): Prefilter
   const spread = feed.book.spreadBps() ?? Infinity;
   if (spread > cfg.prefilter.maxSpreadBps) reasons.push(`spread_${spread.toFixed(1)}bps`);
 
-  const [bid25, ask25] = feed.book.depthUsdWithin(25);
-  if (Math.min(bid25, ask25) < cfg.prefilter.minDepth25BpsUsd) reasons.push("thin_depth_25bps");
+  if (feed.book.hasDepth && cfg.prefilter.minDepth25BpsUsd > 0) {
+    const [bid25, ask25] = feed.book.depthUsdWithin(25);
+    if (Math.min(bid25, ask25) < cfg.prefilter.minDepth25BpsUsd) reasons.push("thin_depth_25bps");
+  }
 
   const t1m = feed.trades.since(now - 60_000, (t) => t.ts);
   if (t1m.length < cfg.prefilter.minTrades1m) reasons.push(`few_trades_${t1m.length}`);
@@ -30,7 +32,8 @@ export function prefilter(feed: SymbolFeed, cfg: Config, now: number): Prefilter
     const hi = Math.max(...closed.map((k) => k.high));
     const lo = Math.min(...closed.map((k) => k.low));
     range5mPct = ((hi - lo) / mid) * 100;
-    if (range5mPct < cfg.prefilter.minRange5mVsBarrier * cfg.question.barrierPct) reasons.push("too_quiet");
+    // In vol mode the barrier tracks the range, so this check only bites in fixed mode.
+    if (cfg.question.barrierMode === "fixed" && range5mPct < cfg.prefilter.minRange5mVsBarrier * cfg.question.barrierPct) reasons.push("too_quiet");
   }
 
   const mid5mAgo = feed.mids.at(now - 5 * 60_000, (m) => m.ts)?.mid;
