@@ -9,7 +9,8 @@ export const REGIMES: readonly Regime[] = ["organic_momentum", "manipulation", "
 export interface ChoiceSpec<L extends string> {
   type: "choice";
   instructions: string;
-  criteria: Record<L, string>;
+  /** A subset of labels is allowed: the two-way direction probe omits `neither`. */
+  criteria: Partial<Record<L, string>>;
 }
 
 /** One wording of the triple-barrier question. Versioned so answers from different wordings never mix. */

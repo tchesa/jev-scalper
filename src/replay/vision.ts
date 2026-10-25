@@ -6,7 +6,7 @@
  * historical best bid/ask; the replay book is a proxy built from prints.
  */
 import { spawn } from "node:child_process";
-import { createWriteStream, existsSync, mkdirSync, readdirSync, renameSync, statSync, unlinkSync } from "node:fs";
+import { createWriteStream, existsSync, mkdirSync, readdirSync, renameSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { createInterface } from "node:readline";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
@@ -15,10 +15,17 @@ import type { Kline } from "../types.js";
 
 const log = logger("vision");
 const BASE = "https://data.binance.vision/data/futures/um/daily";
+const SPOT = "https://data.binance.vision/data/spot/daily";
 
 export type Dataset = "aggTrades" | "klines" | "markPriceKlines" | "premiumIndexKlines" | "metrics" | "bookDepth";
 
-export function datasetUrl(dataset: Dataset, symbol: string, day: string): string {
+export type Market = "um" | "spot";
+
+export function datasetUrl(dataset: Dataset, symbol: string, day: string, market: Market = "um"): string {
+  if (market === "spot") {
+    if (dataset !== "klines" && dataset !== "aggTrades") throw new Error(`spot dumps: ${dataset} not supported here`);
+    return dataset === "klines" ? `${SPOT}/klines/${symbol}/1m/${symbol}-1m-${day}.zip` : `${SPOT}/aggTrades/${symbol}/${symbol}-aggTrades-${day}.zip`;
+  }
   switch (dataset) {
     case "klines":
     case "markPriceKlines":
@@ -30,15 +37,17 @@ export function datasetUrl(dataset: Dataset, symbol: string, day: string): strin
 }
 
 /** Download once into the cache directory; returns the local zip path or null on 404. */
-export async function fetchDataset(dataset: Dataset, symbol: string, day: string, cacheDir: string): Promise<string | null> {
-  const dir = `${cacheDir}/${dataset}`;
+export async function fetchDataset(dataset: Dataset, symbol: string, day: string, cacheDir: string, market: Market = "um"): Promise<string | null> {
+  const dir = market === "spot" ? `${cacheDir}/spot-${dataset}` : `${cacheDir}/${dataset}`;
   mkdirSync(dir, { recursive: true });
   const file = `${dir}/${symbol}-${dataset}-${day}.zip`;
   if (existsSync(file) && statSync(file).size > 0) return file;
-  const url = datasetUrl(dataset, symbol, day);
+  if (existsSync(`${file}.404`)) return null;
+  const url = datasetUrl(dataset, symbol, day, market);
   const res = await fetch(url);
   if (res.status === 404) {
-    log.warn("not available", { dataset, symbol, day });
+    log.debug("not available", { dataset, symbol, day, market });
+    writeFileSync(`${file}.404`, "");
     return null;
   }
   if (!res.ok || !res.body) throw new Error(`${url} -> ${res.status}`);

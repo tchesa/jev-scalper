@@ -25,8 +25,15 @@ const envSchema = z.object({
   MODELS: list("mock,random"),
 
   SYMBOLS: list(""),
+  // Universe by Binance underlyingSubType tags. "*" = any tag. Exclusions always apply.
+  UNIVERSE_TAGS: list("Meme"),
+  UNIVERSE_EXCLUDE_TAGS: list(""),
+  UNIVERSE_EXCLUDE_SYMBOLS: list(""),
   MAX_SYMBOLS: z.coerce.number().int().positive().default(20),
   MIN_QUOTE_VOLUME_24H: z.coerce.number().nonnegative().default(20_000_000),
+  MAX_QUOTE_VOLUME_24H: z.coerce.number().nonnegative().default(0), // 0 = no cap
+  // How the question describes the contract ("meme coin", "mid-cap altcoin"); recorded per run.
+  ASSET_LABEL: z.string().default("meme coin"),
   UNIVERSE_REFRESH_MS: z.coerce.number().int().positive().default(5 * 60_000),
 
   DECISION_INTERVAL_MS: z.coerce.number().int().min(1_000).default(30_000),
@@ -72,8 +79,12 @@ export interface Config {
   models: ModelName[];
   universe: {
     symbols: string[];
+    tags: string[];
+    excludeTags: string[];
+    excludeSymbols: string[];
     maxSymbols: number;
     minQuoteVolume24h: number;
+    maxQuoteVolume24h: number;
     refreshMs: number;
   };
   loop: { decisionIntervalMs: number; maxCallsPerRound: number; modelTimeoutMs: number };
@@ -86,6 +97,7 @@ export interface Config {
     horizonMs: number;
     askRegime: boolean;
     versions: QuestionVersion[];
+    assetLabel: string;
   };
   state: { bars1m: number };
   costs: {
@@ -119,8 +131,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     models: models as ModelName[],
     universe: {
       symbols: e.SYMBOLS.map((s) => s.toUpperCase()),
+      tags: e.UNIVERSE_TAGS.map((t) => t.toLowerCase()),
+      excludeTags: e.UNIVERSE_EXCLUDE_TAGS.map((t) => t.toLowerCase()),
+      excludeSymbols: e.UNIVERSE_EXCLUDE_SYMBOLS.map((s) => s.toUpperCase()),
       maxSymbols: e.MAX_SYMBOLS,
       minQuoteVolume24h: e.MIN_QUOTE_VOLUME_24H,
+      maxQuoteVolume24h: e.MAX_QUOTE_VOLUME_24H,
       refreshMs: e.UNIVERSE_REFRESH_MS,
     },
     loop: {
@@ -136,6 +152,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       barrierCapPct: e.BARRIER_CAP_PCT,
       horizonMs: Math.round(e.HORIZON_MIN * 60_000),
       askRegime: e.ASK_REGIME,
+      assetLabel: e.ASSET_LABEL,
       versions: e.QUESTION_VERSIONS.map((v) => {
         if (!(QUESTION_VERSIONS as readonly string[]).includes(v)) throw new Error(`Unknown question version: ${v}`);
         return v as QuestionVersion;

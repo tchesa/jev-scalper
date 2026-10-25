@@ -45,13 +45,21 @@ export class MockModel implements Model {
     const reach = Math.log(Math.max(vol5, 1e-4) / b); // 0 when vol equals barrier
     const neitherLogit = -reach * 1.2;
 
-    const [pUp, pDown, pNeither] = softmax3(dir * 0.9, -dir * 0.9, neitherLogit);
+    let [pUp, pDown, pNeither] = softmax3(dir * 0.9, -dir * 0.9, neitherLogit);
+    const first = question.variants[0]!;
+    if (first.question.criteria.neither === undefined) {
+      // Two-way variant: renormalize over the offered directions.
+      const s = pUp + pDown;
+      pUp /= s;
+      pDown /= s;
+      pNeither = 0;
+    }
     const barrier = pick<BarrierOutcome>({ up_first: pUp, down_first: pDown, neither: pNeither });
 
     // Wording-blind: one answer, recorded under the first variant only.
     const out: ModelOutput = {
       modelVersion: "mock-v1",
-      barriers: [{ version: question.variants[0]!.version, answer: barrier }],
+      barriers: [{ version: first.version, answer: barrier }],
       latencyMs: Math.round(performance.now() - t0),
     };
     if (question.regime) {

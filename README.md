@@ -34,8 +34,11 @@ Runs as a single Node 22+ process. SQLite is Node's built-in `node:sqlite`, so t
    horizon), plus forward mids at 10 s / 30 s / 60 s / 5 min. Every state is labeled, whether or not any
    model leaned.
 
-Universe: USDT perpetuals Binance tags as `Meme`, ranked by 24h quote volume (46 as of 2026-10-23), refreshed
-every 5 min. Override with `SYMBOLS=DOGEUSDT,1000PEPEUSDT`.
+Universe: USDT perpetuals whose Binance `underlyingSubType` tags match `UNIVERSE_TAGS` (default `Meme`; 46 such
+contracts as of 2026-10-23), minus `UNIVERSE_EXCLUDE_TAGS` and `UNIVERSE_EXCLUDE_SYMBOLS`, inside the
+`MIN_QUOTE_VOLUME_24H`..`MAX_QUOTE_VOLUME_24H` band, ranked by volume, refreshed every 5 min. Override with
+`SYMBOLS=DOGEUSDT,1000PEPEUSDT`. `ASSET_LABEL` is how the question describes the contract and should match the
+universe (for example `mid-cap altcoin` with Layer-1/Layer-2/DeFi tags and BTC/ETH excluded).
 
 ## Barrier size
 
@@ -62,6 +65,35 @@ L2, so `imbalanceTop5`, `depthUsd` and the top-5 levels are omitted and only `de
 from the depth dump) is present; funding is the last settled rate. States are anonymized by default
 (`symbol: "PERP"`, `ts: null`) so a model calibrated on LLM answers cannot recall a famous episode by name or
 date. Dumps are cached under `data/binance-vision/`. Pending labels at the end of the data are marked `lost`.
+
+## Announcements track (`src/announcements/`)
+
+Second use of Jev after the price-state track closed (see REPORT.md): Jev reads Binance announcements that
+mention a Meme-tagged contract; code measures what the price did afterwards.
+
+```bash
+pnpm ann:crawl        # every catalog's article list back to 2019, cached under data/announcements/
+pnpm ann:events       # match notices to tracked meme contracts, fetch bodies, measure the price reaction
+pnpm ann:run          # ask Jev (plus mock and random) about every measured event, anonymized by default
+pnpm ann:eval         # what announcements do by kind, and model calibration at 1 h and 24 h
+```
+
+- **Source**: the public CMS endpoints the Binance website uses (list per catalog, detail per article). Bodies
+  are a JSON node tree; `bodyToText` flattens them.
+- **Matching**: a tracked base asset as a whole word in title, body or related pairs, including the
+  `1000PEPEUSDT` and `PEPE/USDT` forms. Ambiguous names (PUMP, BANK, TRUMP, ...) need a crypto cue nearby;
+  one- and two-letter tickers (B, M) need a pair form. Batch notices (leverage, funding, delisting) are
+  always opened because they list symbols only in the body.
+- **Reaction** (`reaction.ts`): from 1-minute bars on the perp if it existed at publication, else spot.
+  p0 is the close of the bar containing the publish time (within 60 s). Returns at 5 m / 15 m / 30 m / 1 h /
+  4 h / 24 h, the slow-reader variant from the open five minutes later, max excursions in the first hour,
+  the move in the hour and day before (front-running), and the volume ratio after/before.
+- **Questions** (`ann-v1`): what the notice does for the token (nine labels including "passing mention"),
+  the 1 h reaction (±1 %: up / down / flat), the 24 h reaction (±3 %), and a yes/no on whether this is new
+  information. The state is the notice text plus which markets the token trades on.
+- **Anonymization** (default on): token, pair symbols, the project name before "(TOKEN)", dates and years are
+  replaced, so recall of a famous listing cannot masquerade as reading skill. `--anonymize false` runs the
+  named variant for comparison; the ledger keeps both apart.
 
 ## The question (`src/model/question.ts`)
 
@@ -110,6 +142,7 @@ src/ledger/    SQLite schema and inserts
 src/labeler/   triple-barrier labeling from trade prints
 src/eval/      calibration report
 src/replay/    Binance Vision loader, replay feed (virtual clock), replay runner
+src/announcements/  announcement archive, matcher, reaction labeler, Jev questions, runner, evaluation
 src/main.ts    live orchestration
 ```
 

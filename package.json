@@ -14,7 +14,12 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "jev:ping": "node --import tsx src/scripts/jevPing.ts",
-    "replay": "node --no-warnings=ExperimentalWarning --import tsx src/replay/run.ts"
+    "replay": "node --no-warnings=ExperimentalWarning --import tsx src/replay/run.ts",
+    "signal": "node --no-warnings=ExperimentalWarning --import tsx src/eval/signal.ts",
+    "ann:crawl": "node --no-warnings=ExperimentalWarning --import tsx src/announcements/crawl.ts",
+    "ann:events": "node --no-warnings=ExperimentalWarning --import tsx src/announcements/events.ts",
+    "ann:run": "node --no-warnings=ExperimentalWarning --import tsx src/announcements/run.ts",
+    "ann:eval": "node --no-warnings=ExperimentalWarning --import tsx src/announcements/eval.ts"
   },
   "dependencies": {
     "@typesafe-ai/sdk": "^0.7.0",

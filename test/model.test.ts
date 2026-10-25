@@ -37,6 +37,19 @@ describe("question", () => {
     expect(question.regime).toBeDefined();
   });
 
+  it("substitutes the asset label into every wording", () => {
+    const q = buildQuestion(loadConfig({ ASSET_LABEL: "mid-cap altcoin" }));
+    for (const v of q.variants) expect(v.question.instructions).toMatch(/on a mid-cap altcoin,/);
+    expect(question.variants[0]!.question.instructions).toMatch(/on a meme coin,/);
+  });
+
+  it("dir-v1 offers only the two directions", () => {
+    const q = buildQuestion(loadConfig({ QUESTION_VERSIONS: "dir-v1" }));
+    expect(q.variants).toHaveLength(1);
+    expect(Object.keys(q.variants[0]!.question.criteria)).toEqual(["up_first", "down_first"]);
+    expect(q.variants[0]!.question.instructions).toMatch(/WILL reach one of two barriers/);
+  });
+
   it("tb-v2 carries no strategy hints", () => {
     const v2 = question.variants.find((v) => v.version === "tb-v2")!.question.instructions;
     expect(v2).not.toMatch(/mean-revert|manufactured|tend to continue/);
@@ -66,6 +79,13 @@ describe("MockModel", () => {
     const large = await m.evaluate(sampleState({ tier: "large", ...spike }), question, signal);
     expect(small.barriers[0]!.answer.probabilities.down_first).toBeGreaterThan(small.barriers[0]!.answer.probabilities.up_first);
     expect(large.barriers[0]!.answer.probabilities.up_first).toBeGreaterThan(large.barriers[0]!.answer.probabilities.down_first);
+  });
+
+  it("answers a two-way variant with P(neither) = 0", async () => {
+    const q = buildQuestion(loadConfig({ QUESTION_VERSIONS: "dir-v1" }));
+    const out = await m.evaluate(sampleState(), q, signal);
+    expect(out.barriers[0]!.answer.probabilities.neither).toBe(0);
+    expect(out.barriers[0]!.answer.probabilities.up_first + out.barriers[0]!.answer.probabilities.down_first).toBeCloseTo(1);
   });
 
   it("raises P(neither) when realized vol is far below the barrier", async () => {

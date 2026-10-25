@@ -11,9 +11,17 @@ export interface Universe {
   selected: string[];
 }
 
+/** True when the contract's Binance tags satisfy the configured include/exclude lists. */
+export function tagsMatch(tags: string[], cfg: Config): boolean {
+  const lower = tags.map((t) => t.toLowerCase());
+  if (cfg.universe.excludeTags.some((t) => lower.includes(t))) return false;
+  if (cfg.universe.tags.includes("*")) return true;
+  return cfg.universe.tags.some((t) => lower.includes(t));
+}
+
 /**
- * Meme-tagged USDT perpetuals ranked by 24h quote volume, or an explicit SYMBOLS list.
- * Funding intervals come from /fundingInfo (only non-8h contracts are listed there).
+ * USDT perpetuals matching the configured tags, inside the 24h quote-volume band, ranked by volume;
+ * or an explicit SYMBOLS list. Funding intervals come from /fundingInfo (only non-8h contracts are listed).
  */
 export async function loadUniverse(cfg: Config): Promise<Universe> {
   const [metasList, intervals, tickers] = await Promise.all([getExchangeInfo(), getFundingIntervals(), getTickers24h()]);
@@ -29,10 +37,11 @@ export async function loadUniverse(cfg: Config): Promise<Universe> {
       return metas.has(s);
     });
   } else {
+    const maxVol = cfg.universe.maxQuoteVolume24h || Infinity;
     selected = [...metas.values()]
-      .filter((m) => m.tags.some((t) => t.toLowerCase() === "meme"))
+      .filter((m) => tagsMatch(m.tags, cfg) && !cfg.universe.excludeSymbols.includes(m.symbol))
       .map((m) => ({ m, vol: tickers.get(m.symbol)?.quoteVolume ?? 0 }))
-      .filter((x) => x.vol >= cfg.universe.minQuoteVolume24h)
+      .filter((x) => x.vol >= cfg.universe.minQuoteVolume24h && x.vol <= maxVol)
       .sort((a, b) => b.vol - a.vol)
       .slice(0, cfg.universe.maxSymbols)
       .map((x) => x.m.symbol);
