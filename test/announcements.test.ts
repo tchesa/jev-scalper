@@ -5,6 +5,7 @@ import { eventKind, matchAssets, type TrackedAsset } from "../src/announcements/
 import { measure } from "../src/announcements/reaction.js";
 import { impactLabel } from "../src/announcements/question.js";
 import { isListingTitle } from "../src/announcements/listings.js";
+import { urlVariants } from "../src/announcements/poll.js";
 import type { Kline } from "../src/types.js";
 
 const assets: TrackedAsset[] = [
@@ -53,6 +54,16 @@ describe("eventKind", () => {
     expect(eventKind("Binance Will List OFFICIAL TRUMP (TRUMP) with Seed Tag Applied")).toBe("spot_listing");
     expect(eventKind("Binance Will Extend the Monitoring Tag to MEME")).toBe("risk_tag");
     expect(eventKind("Trade PEPE to Share 500,000 USDT in Rewards")).toBe("promotion");
+  });
+});
+
+describe("urlVariants", () => {
+  it("yields enough distinct URLs to outrun a 120 s cache at a 5 s poll", () => {
+    const v = urlVariants();
+    expect(new Set(v.listings).size).toBe(v.listings.length);
+    expect(v.listings.length).toBeGreaterThanOrEqual(24);
+    expect(v.listings.every((u) => /catalogId=48/.test(u))).toBe(true);
+    expect(new Set(v.all).size).toBe(v.all.length);
   });
 });
 

@@ -4,7 +4,10 @@
  *
  *   pnpm ann:poll [--db data/announcements-live.sqlite] [--interval 5] [--universe all|meme] [--anonymize true]
  *
- * One request every `interval` seconds to the all-catalog list endpoint (5 newest per catalog).
+ * The list endpoints sit behind CloudFront with a 120 s cache keyed on the exact URL, including parameter
+ * order. Polling one fixed URL therefore sees a notice up to two minutes late. The poller cycles through
+ * parameter orderings and page sizes so every request is a fresh origin fetch: the new-listings catalog
+ * (48) on every tick, the all-catalog endpoint on every other tick. Cache status and feed lag are recorded.
  * Every 30 minutes it also labels events older than 25 h from REST bars, so one process does everything.
  */
 import { randomUUID } from "node:crypto";
@@ -20,7 +23,22 @@ import { ANN_QUESTION_VERSION, annQuestions, type AnnState, type Impact } from "
 
 const log = logger("poll");
 const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36";
-const APEX = "https://www.binance.com/bapi/apex/v1/public/apex/cms/article/list/query?type=1&pageNo=1&pageSize=5";
+const APEX = "https://www.binance.com/bapi/apex/v1/public/apex/cms/article/list/query?";
+const COMPOSITE = "https://www.binance.com/bapi/composite/v1/public/cms/article/list/query?";
+
+function permutations<T>(xs: T[]): T[][] {
+  if (xs.length <= 1) return [xs];
+  return xs.flatMap((x, i) => permutations([...xs.slice(0, i), ...xs.slice(i + 1)]).map((p) => [x, ...p]));
+}
+
+/** Distinct URLs that CloudFront caches separately but the origin answers identically. */
+export function urlVariants(): { listings: string[]; all: string[] } {
+  const listings: string[] = [];
+  for (const size of [5, 10, 20]) for (const order of permutations(["type=1", "pageNo=1", `pageSize=${size}`, "catalogId=48"])) listings.push(COMPOSITE + order.join("&"));
+  const all: string[] = [];
+  for (const size of [5, 10]) for (const order of permutations(["type=1", "pageNo=1", `pageSize=${size}`])) all.push(APEX + order.join("&"));
+  return { listings, all };
+}
 
 function arg(name: string, def: string): string {
   const i = process.argv.indexOf(`--${name}`);
@@ -37,7 +55,9 @@ async function universe(kind: "all" | "meme"): Promise<TrackedAsset[]> {
     .map((s) => {
       const base = s.baseAsset.replace(/^(1000000|1000|1M)(?=[A-Z])/, "");
       const meme = (s.underlyingSubType ?? []).some((t) => /meme/i.test(t));
-      return { base, perp: s.symbol, spot: spotBases.has(base) ? `${base}USDT` : null, perpOnboard: s.onboardDate, group: meme ? "meme" : "other", strict: !meme && base.length <= 4 };
+      // Short names (NEWT, BANK, PUMP, ...) only count in pair or "(TOKEN)" form, whatever their group; a quiz
+      // or campaign notice that uses the word in prose is not an event.
+      return { base, perp: s.symbol, spot: spotBases.has(base) ? `${base}USDT` : null, perpOnboard: s.onboardDate, group: meme ? "meme" : "other", strict: base.length <= 4 };
     })
     .filter((a) => kind === "all" || a.group === "meme");
 }
@@ -64,13 +84,22 @@ async function main(): Promise<void> {
   let assetsAt = Date.now();
   let labelAt = 0;
   const seen = new Set<string>();
+  const variants = urlVariants();
+  let vi = 0;
+  let tick = 0;
+  const stats = { polls: 0, hits: 0, misses: 0, errors: 0, notices: 0, lagMs: [] as number[] };
+  let statsAt = Date.now();
   // Prime with what is already published so only genuinely new notices trigger calls.
-  const prime = (await (await fetch(APEX, { headers: { "User-Agent": UA } })).json()) as { data: { catalogs: Array<{ catalogId: number; articles: ListedArticle[] }> } };
-  for (const c of prime.data.catalogs) for (const a of c.articles) seen.add(a.code);
-  log.info("polling", { runId: randomUUID(), intervalMs, universe: uni, assets: assets.length, primed: seen.size, anonymize });
+  // Prime from the largest page sizes so nothing the variants can return later looks new.
+  for (const url of [variants.all[variants.all.length - 1]!, variants.listings[variants.listings.length - 1]!]) {
+    const prime = (await (await fetch(url, { headers: { "User-Agent": UA } })).json()) as { data: { catalogs: Array<{ catalogId: number; articles: ListedArticle[] }> } };
+    for (const c of prime.data.catalogs) for (const a of c.articles) seen.add(a.code);
+  }
+  log.info("polling", { runId: randomUUID(), intervalMs, universe: uni, assets: assets.length, primed: seen.size, anonymize, urlVariants: variants.listings.length + variants.all.length });
 
   for (;;) {
     const t0 = Date.now();
+    tick++;
     try {
       if (t0 - assetsAt > 6 * 3_600_000) {
         assets = await universe(uni);
@@ -80,22 +109,42 @@ async function main(): Promise<void> {
         labelAt = t0;
         await labelDue(ledger).catch((err) => log.warn("labeling failed", err));
       }
-      const res = await fetch(APEX, { headers: { "User-Agent": UA } });
+      // Listings catalog every tick, everything else every other tick; always a URL CloudFront has not cached.
+      const pool = tick % 2 === 0 ? variants.all : variants.listings;
+      const url = pool[vi++ % pool.length]!;
+      const res = await fetch(url, { headers: { "User-Agent": UA } });
+      stats.polls++;
       if (res.status === 429) {
+        stats.errors++;
         log.warn("throttled");
         await sleep(30_000);
         continue;
       }
+      if (/Hit/.test(res.headers.get("x-cache") ?? "")) stats.hits++;
+      else stats.misses++;
       const data = (await res.json()) as { data: { catalogs: Array<{ catalogId: number; catalogName: string; articles: ListedArticle[] }> } };
+      if (Date.now() - statsAt > 10 * 60_000) {
+        const lag = [...stats.lagMs].sort((a, b) => a - b);
+        log.info("stats 10 min", { polls: stats.polls, cacheHits: stats.hits, misses: stats.misses, errors: stats.errors, notices: stats.notices, lagMedianMs: lag.length ? lag[Math.floor(lag.length / 2)] : null });
+        Object.assign(stats, { polls: 0, hits: 0, misses: 0, errors: 0, notices: 0, lagMs: [] });
+        statsAt = Date.now();
+      }
       for (const c of data.data.catalogs) {
         for (const a of c.articles) {
           if (seen.has(a.code)) continue;
           seen.add(a.code);
           const seenAt = Date.now();
+          // A first sighting of something published hours ago is a deeper page, not a live notice.
+          if (seenAt - a.releaseDate > 2 * 3_600_000) {
+            log.debug("old article first seen, ignored", { code: a.code, ageMin: Math.round((seenAt - a.releaseDate) / 60_000) });
+            continue;
+          }
+          stats.notices++;
+          stats.lagMs.push(seenAt - a.releaseDate);
           const listed: ListedArticle = { ...a, catalogId: c.catalogId };
           const d = await fetchDetail(listed, cacheDir, 0);
           const hits = matchAssets(d, assets);
-          log.info("new notice", { code: a.code, lagMs: seenAt - a.releaseDate, title: a.title.slice(0, 90), hits: hits.map((h) => h.base) });
+          log.info("new notice", { code: a.code, lagMs: seenAt - a.releaseDate, cache: res.headers.get("x-cache"), title: a.title.slice(0, 90), hits: hits.map((h) => h.base) });
           for (const asset of hits) {
             const text = d.text.length > 4000 ? `${d.text.slice(0, 4000)}\n[truncated]` : d.text;
             const listedBefore = asset.perpOnboard > 0 && asset.perpOnboard < a.releaseDate;
@@ -129,7 +178,10 @@ async function main(): Promise<void> {
   }
 }
 
-main().catch((err) => {
-  log.error("fatal", err);
-  process.exit(1);
-});
+// Run only when invoked directly, so tests can import urlVariants without starting a poller.
+if (process.argv[1] && /poll\.ts$|poll\.js$/.test(process.argv[1])) {
+  main().catch((err) => {
+    log.error("fatal", err);
+    process.exit(1);
+  });
+}
