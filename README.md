@@ -76,6 +76,7 @@ pnpm ann:crawl        # every catalog's article list back to 2019, cached under 
 pnpm ann:events       # match notices to tracked meme contracts, fetch bodies, measure the price reaction
 pnpm ann:run          # ask Jev (plus mock and random) about every measured event, anonymized by default
 pnpm ann:eval         # what announcements do by kind, and model calibration at 1 h and 24 h
+pnpm ann:listings     # listing-rule backfill across every USDⓈ-M perp that ever existed (REPORT-announcements.md 7a)
 pnpm ann:poll         # live forward test: poll the feed every 5 s, ask Jev on publication, record feed lag
 pnpm ann:label        # fill reactions for polled events older than 25 h from REST 1-minute bars
 ```

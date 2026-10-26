@@ -21,7 +21,8 @@
     "ann:run": "node --no-warnings=ExperimentalWarning --import tsx src/announcements/run.ts",
     "ann:eval": "node --no-warnings=ExperimentalWarning --import tsx src/announcements/eval.ts",
     "ann:poll": "node --no-warnings=ExperimentalWarning --import tsx src/announcements/poll.ts",
-    "ann:label": "node --no-warnings=ExperimentalWarning --import tsx src/announcements/label.ts"
+    "ann:label": "node --no-warnings=ExperimentalWarning --import tsx src/announcements/label.ts",
+    "ann:listings": "node --no-warnings=ExperimentalWarning --import tsx src/announcements/listings.ts"
   },
   "dependencies": {
     "@typesafe-ai/sdk": "^0.7.0",

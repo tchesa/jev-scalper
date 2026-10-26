@@ -173,21 +173,56 @@ So the claim that survives is narrower than "Jev has edge on announcements": **s
 for perp-listed tokens is the edge, and Jev is an adequate but unnecessary classifier for them.** With 13 events
 the size of that edge is unknown; the rule's interval includes zero.
 
-Pre-registered forward test (live poller is built: `pnpm ann:poll`, labels via `pnpm ann:label`):
+## 7a. The listing rule across all perps (backfill, 2026-10-25)
 
-1. Universe: all USDⓈ-M perpetuals, not only memes, to multiply the event rate; group recorded per event.
-2. Record for every notice: publish time, time the poller first saw it (feed lag), Jev's answers, and the
-   reaction measured from REST 1-minute bars after 25 hours.
-3. Decision after 30 listing-rule events (expected within one to two months on all perps), using the same
-   rule as above, no Jev in the rule:
-   - pass if the mean 1 h return entering at the first full minute after the poller saw the notice is above
-     1 % with a bootstrap interval above zero, and the median is above costs;
-   - separately, Jev's P(up, 1 h) must rank those events with AUC above 0.65 to justify keeping it in the loop
-     at all; otherwise the rule alone goes forward.
-4. Only after a pass: the pessimistic fill engine on listing events, taker entry at the first print after
-   detection, exit at 1 h or a 5 % stop, real fees and funding.
+The pre-registered 30-event forward test would take about 21 months at the observed rate (17 qualifying
+notices in the last 12 months across all perps), so the rule was measured historically instead:
+`pnpm ann:listings` opens every spot-listing notice in the archive (454 titles), keeps the tokens named in the
+title whose USDⓈ-M perp already traded at publication, and measures the perp's reaction. Options, leveraged-token
+and hard-fork notices are excluded. 44 events, 2023 to 2026, 11 meme and 33 other, 42 notices. Removed
+contracts contributed none (all were listed on spot before their perps).
 
-Not to be done: trading on the current ranking, or on the rule, before the forward test.
+| entry | n | mean 1 h | CI | median | CI | > +1 % | < −1 % | without best 3 |
+|---|---|---|---|---|---|---|---|---|
+| within 60 s of publication | 44 | +6.8 % | [−0.1, 15.8] | +1.9 % | [−2.3, 6.6] | 55 % | 41 % | +0.9 % |
+| five minutes later | 44 | +4.0 % | [0.0, 8.3] | +1.4 % | [−0.5, 6.4] | 50 % | 36 % | +1.4 % |
+| 24 h | 44 | +0.1 % | [−9.7, 10.8] | −4.0 % | | 41 % | 57 % | |
+
+What the 44 events say:
+
+- **The move is front-run and fades.** Median +13 % in the hour before the notice and +16 % in the day before,
+  volume 14× normal in the hour after, and a median 24 h return of −4 %. The notice confirms what the market
+  already traded on; the first hour is the last leg.
+- **Perp age is the variable.** Perps younger than 90 days at the notice (n 33): mean +10.2 % [1.4, 21.4],
+  median +4.4 %, 64 % up more than 1 %, +2.5 % without the best three; slow entry +6.0 % [1.6, 11.3], median
+  +4.4 %. Perps older than 90 days (n 11): mean −3.4 %, median −1.6 %, 27 % up. A listing of a token the
+  market has traded for months is not news.
+- **2025 was the year, 2026 is not.** Young-perp events in 2025 (n 15): median +6.6 % [1.4, 28.3], 87 % up.
+  In 2026 (n 15): median −4.1 % [−11.6, 14.3], 53 % down more than 1 %; slow entry median +0.3 %. Binance now
+  launches many perps as pre-market contracts days before the spot listing, so the listing is anticipated.
+- **Jev's within-rule ranking is mostly perp age.** Its P(up) correlates −0.59 with log perp age, which it
+  reads from the state field `perpListedDaysAgo`, and not at all with the prior move (−0.02). Within young
+  perps, Jev's top half has median +6.2 % [1.0, 11.5] (slow +4.7 %) against +1.4 % for the bottom half, so it
+  adds something beyond age, on 16 events, with an AUC interval [0.49, 0.83] that includes chance.
+- **With a 5 % stop and 1 % cost**, young-perp events net a mean of +9.3 % but a median of 0.0 %, and 48 % hit
+  the stop inside the hour.
+
+Reading: the spot-listing pump on recently launched perps was real and large in 2025 and is at best marginal
+in 2026. The historical mean is carried by a handful of events, the median is near costs in the latest year,
+and half the trades hit a 5 % stop. This is the strongest effect found in the project and still not a trade.
+
+Pre-registered forward test, revised (live poller running: `pnpm ann:poll`, all perps, feed lag recorded):
+
+1. Rule v2: spot-listing title naming the token, perp already trading and younger than 90 days. No Jev in the
+   rule. Expected rate about one event a month.
+2. Measure on each live event: feed lag (first-seen minus publish time), 1 h return from the first full minute
+   after detection, max drawdown in the hour, and Jev's P(up) ranking. 
+3. Decision after 10 live rule-v2 events (roughly 8 to 10 months): proceed to a fill engine only if the median
+   1 h return from detection is above +2 % and at most 3 of the 10 fall more than 1 %. A median below 0 on the
+   first 6 closes the track early. Jev stays in the loop only if its top half beats its bottom half on those
+   events; otherwise the rule alone goes forward.
+4. No trading before then. The 2026 half of the backfill already fails criterion 3 (median −4.1 % fast,
+   +0.3 % slow), which is the prior to hold.
 
 ## 8. Reproducing
 
@@ -196,4 +231,5 @@ pnpm ann:crawl && pnpm ann:events
 pnpm ann:run -- --models jev,mock,random --anonymize true
 pnpm ann:run -- --models jev --anonymize false
 pnpm ann:eval -- --anonymized 1
+pnpm ann:listings && pnpm ann:run -- --events data/announcements/events-listings.json --db data/announcements-listings.sqlite
 ```

@@ -4,6 +4,7 @@ import { bodyToText } from "../src/announcements/fetch.js";
 import { eventKind, matchAssets, type TrackedAsset } from "../src/announcements/match.js";
 import { measure } from "../src/announcements/reaction.js";
 import { impactLabel } from "../src/announcements/question.js";
+import { isListingTitle } from "../src/announcements/listings.js";
 import type { Kline } from "../src/types.js";
 
 const assets: TrackedAsset[] = [
@@ -52,6 +53,18 @@ describe("eventKind", () => {
     expect(eventKind("Binance Will List OFFICIAL TRUMP (TRUMP) with Seed Tag Applied")).toBe("spot_listing");
     expect(eventKind("Binance Will Extend the Monitoring Tag to MEME")).toBe("risk_tag");
     expect(eventKind("Trade PEPE to Share 500,000 USDT in Rewards")).toBe("promotion");
+  });
+});
+
+describe("isListingTitle", () => {
+  it("accepts main-exchange spot listings and rejects add-ons, futures launches, Alpha and stocks", () => {
+    expect(isListingTitle("Binance Will List Giggle Fund (GIGGLE) and SynFutures (F) with Seed Tag Applied")).toBe(true);
+    expect(isListingTitle("Binance Announced the First Batch of Vote to List Results and Will List Mubarak (MUBARAK)")).toBe(true);
+    expect(isListingTitle("Binance Will Add OFFICIAL TRUMP (TRUMP) on Earn, Buy Crypto, Convert & Margin")).toBe(false);
+    expect(isListingTitle("Binance Margin Will List PENGU on Cross Margin")).toBe(false);
+    expect(isListingTitle("Binance Futures Will Launch USDⓈ-M PNUTUSDT Perpetual Contract")).toBe(false);
+    expect(isListingTitle("Binance Alpha Will List Fogo (FOGO)")).toBe(false);
+    expect(isListingTitle("Binance Exchange Lists Trump Media (DJTB) bStocks on Binance Spot")).toBe(false);
   });
 });
 
